@@ -1,0 +1,13 @@
+#!/bin/bash
+ 
+PART=$1
+
+mount_points=(usb1 usb2 usb3 usb4 usb5)
+for i in "${mount_points[@]}"
+do
+	if ! mountpoint -q /media/$1
+	then
+		/usr/bin/pmount --umask 000 --noatime -w --sync /dev/${PART} /media/$i
+		exit 0
+	fi
+done
