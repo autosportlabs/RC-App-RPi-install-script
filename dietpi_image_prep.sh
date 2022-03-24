@@ -15,13 +15,13 @@ then
 fi
 
 # Determine the start offset for the first bootable partition
-partition_offset=$(parted -s "$1" unit B print | grep -A 2 '^Number' | awk '$7~/boot/ {sub(/B$/,"",$2); print $2; exit;}')
+partition_offset=$(parted -s "$1" unit B print | grep -A 2 '^Number' | awk '$1~/1/ {sub(/B$/,"",$2); print $2; exit;}')
 
 # Create a mount point if one doesn't exist
 [ ! -d "$MOUNT_POINT" ] && mkdir "$MOUNT_POINT"
 
 # Mount the partition
-echo "Mounting '$1' to '$MOUNT_POINT'"
+echo "Mounting '$1' to '$MOUNT_POINT' at offset '$partition_offset'"
 mount -o loop,offset=$partition_offset "$1" "$MOUNT_POINT"
 
 if [ -f "$MOUNT_POINT/cmdline.txt" ]
@@ -34,7 +34,11 @@ if [ -f "$MOUNT_POINT/config.txt" ]
 then
 	echo "Modifying config.txt"
 	sed -i "s/gpu_mem_1024=.*/gpu_mem_1024=256/" "$MOUNT_POINT/config.txt"
-	echo "dtoverlay=vc4-fkms-v3d" >> "$MOUNT_POINT/config.txt"
+	# Moved to rcdash_setup.sh to fix initial reboot issue
+	#echo "display_auto_detect=1" >> "$MOUNT_POINT/config.txt"
+	echo "ignore_lcd=1" >> "$MOUNT_POINT/config.txt"
+	echo "dtoverlay=vc4-kms-dsi-7inch" >> "$MOUNT_POINT/config.txt"
+	echo "dtoverlay=vc4-kms-v3d,noaudio" >> "$MOUNT_POINT/config.txt"
 fi
 
 if [ -f "$MOUNT_POINT/dietpi.txt" ]
@@ -48,4 +52,4 @@ fi
 
 # Unmount image
 echo "Unmounting image"
-#umount "$MOUNT_POINT"
+umount "$MOUNT_POINT"

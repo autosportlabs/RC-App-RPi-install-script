@@ -1,0 +1,2 @@
+# Run the wifi_reconnect script every minute
+* *   * * *   root    /usr/local/bin/wifi_reconnect.sh

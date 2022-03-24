@@ -1,0 +1,8 @@
+echo "Starting RaceCapture, Ctrl-c to abort!"
+for i in $(seq 2 -1 0)
+do
+  echo -n $i
+  sleep 1
+  echo -ne '\b'
+done
+/opt/racecapture/run_racecapture.sh

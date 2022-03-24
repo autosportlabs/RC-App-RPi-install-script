@@ -1,5 +1,8 @@
 #!/bin/bash -e
 
+RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2'`
+RC_APP_FILENAME=`basename $RC_APP_URL`
+
 if [ "$EUID" -ne 0 ] 
 then 
 	echo "Must be run as root"
@@ -9,6 +12,8 @@ fi
 if [ -d /boot/dietpi ]
 then
        	USER=dietpi
+	# Make dietpi not wait on network during boot sequence
+	sed -i 's/Type=oneshot/Type=simple/' /etc/systemd/system/ifup@.service.d/dietpi.conf
 else
 	USER=pi
 	sed -i '1 s/$/ logo.nologo consoleblank=0/' /boot/cmdline.txt
@@ -19,13 +24,15 @@ fi
 # Install the necessary dependencies for the RC App
 apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero
 
-# Setup wifi reconnect
-cat > /etc/cron.d/wifi_reconnect.cron <<EOF
+# Setup wifi reconnect if not using dietpi which has it's own service
+if [ "$USER" == "pi" ]
+then
+  cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
 # Run the wifi_reconnect script every minute
 * *   * * *   root    /usr/local/bin/wifi_reconnect.sh
 EOF
 
-cat > /usr/local/bin/wifi_reconnect.sh <<EOF
+  cat > /usr/local/bin/wifi_reconnect.sh <<'EOF'
 #!/bin/bash 
  
 SSID=$(/sbin/iwgetid --raw) 
@@ -41,10 +48,11 @@ fi
 echo "WiFi check finished"
 EOF
 
-chmod +x /usr/local/bin/wifi_reconnect.sh
+  chmod +x /usr/local/bin/wifi_reconnect.sh
+fi
 
 # Setup shutdown button support for GPIO21
-cat > /usr/local/bin/shutdown_button.py <<EOF
+cat > /usr/local/bin/shutdown_button.py <<'EOF'
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # example gpiozero code that could be used to have a reboot
@@ -83,7 +91,7 @@ pause() # wait forever
 EOF
 chmod +x /usr/local/bin/shutdown_button.py
 
-cat > /etc/systemd/system/shutdown_button.service <<EOF
+cat > /etc/systemd/system/shutdown_button.service <<'EOF'
 [Unit]
 Description=GPIO shutdown button
 After=network.target
@@ -109,7 +117,7 @@ adduser $USER input
 adduser $USER dialout
 
 # Add automount rules
-cat > /usr/local/bin/automount <<EOF
+cat > /usr/local/bin/automount <<'EOF'
 #!/bin/bash
  
 PART=$1
@@ -117,20 +125,20 @@ PART=$1
 mount_points=(usb1 usb2 usb3 usb4 usb5)
 for i in "${mount_points[@]}"
 do
-    if ! mountpoint -q /media/$1
-    then
-        /usr/bin/pmount --umask 000 --noatime -w --sync /dev/${PART} /media/$i
-        exit 0
-    fi
+	if ! mountpoint -q /media/$1
+	then
+		/usr/bin/pmount --umask 000 --noatime -w --sync /dev/${PART} /media/$i
+		exit 0
+	fi
 done
 EOF
 chmod +x /usr/local/bin/automount
 
-cat > /etc/udev/rules.d/usbstick.rules <<EOF
+cat > /etc/udev/rules.d/usbstick.rules <<'EOF'
 ACTION=="add", KERNEL=="sd[a-z][0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
 EOF
 
-cat > /lib/systemd/system/usbstick-handler@.service <<EOF
+cat > /lib/systemd/system/usbstick-handler@.service <<'EOF'
 [Unit]
 Description=Mount USB sticks
 BindsTo=dev-%i.device
@@ -145,15 +153,17 @@ EOF
 
 # Download and install the RC App
 cd /opt
-wget https://autosportlabs-software.s3-us-west-2.amazonaws.com/racecapture_linux_raspberrypi_2.2.1.tar.bz2
-tar xjf racecapture_linux_raspberrypi_2.2.1.tar.bz2
-cat > /home/pi/.bashrc <<EOF
+echo "Installing RC App '$RC_APP_FILENAME'"
+wget "$RC_APP_URL"
+tar xvjf "$RC_APP_FILENAME"
+cat > "/home/$USER/.bashrc" <<'EOF'
 echo "Starting RaceCapture, Ctrl-c to abort!"
-for i in $(seq 5 -1 1)
+for i in $(seq 2 -1 0)
 do
-echo -n $i
-sleep 1
-echo -ne '\b'
+  echo -n $i
+  sleep 1
+  echo -ne '\b'
 done
 /opt/racecapture/run_racecapture.sh
 EOF
+su dietpi -c "ssh-keygen -q -t rsa -N '' <<< $'\\ny' >/dev/null 2>&1"

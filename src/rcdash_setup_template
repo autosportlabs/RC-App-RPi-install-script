@@ -1,0 +1,82 @@
+#!/bin/bash -e
+
+RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2'`
+RC_APP_FILENAME=`basename $RC_APP_URL`
+
+if [ "$EUID" -ne 0 ] 
+then 
+	echo "Must be run as root"
+       	exit
+fi
+
+if [ -d /boot/dietpi ]
+then
+       	USER=dietpi
+	# Make dietpi not wait on network during boot sequence
+	sed -i 's/Type=oneshot/Type=simple/' /etc/systemd/system/ifup@.service.d/dietpi.conf
+else
+	USER=pi
+	sed -i '1 s/$/ logo.nologo consoleblank=0/' /boot/cmdline.txt
+	echo "disable-spash=1" >> /boot/config.txt
+	echo "gpu_mem=256" >> /boot/config.txt
+fi
+
+# Install the necessary dependencies for the RC App
+apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero
+
+# Setup wifi reconnect if not using dietpi which has it's own service
+if [ "$USER" == "pi" ]
+then
+  cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
+__WIFI_RECONNECT_CRON__
+EOF
+
+  cat > /usr/local/bin/wifi_reconnect.sh <<'EOF'
+__WIFI_RECONNECT__
+EOF
+
+  chmod +x /usr/local/bin/wifi_reconnect.sh
+fi
+
+# Setup shutdown button support for GPIO21
+cat > /usr/local/bin/shutdown_button.py <<'EOF'
+__SHUTDOWN_BUTTON_SCRIPT__
+EOF
+chmod +x /usr/local/bin/shutdown_button.py
+
+cat > /etc/systemd/system/shutdown_button.service <<'EOF'
+__SHUTDOWN_BUTTON_SERVICE__
+EOF
+
+systemctl enable shutdown_button.service
+systemctl start shutdown_button.service
+
+# Groups needed for the dietpi user to access opengl, input (touch/mouse) and usb serial ports
+adduser $USER render
+adduser $USER video
+adduser $USER input
+adduser $USER dialout
+
+# Add automount rules
+cat > /usr/local/bin/automount <<'EOF'
+__AUTOMOUNT__
+EOF
+chmod +x /usr/local/bin/automount
+
+cat > /etc/udev/rules.d/usbstick.rules <<'EOF'
+__USBSTICK_RULES__
+EOF
+
+cat > /lib/systemd/system/usbstick-handler@.service <<'EOF'
+__USBSTICK_SERVICE__
+EOF
+
+# Download and install the RC App
+cd /opt
+echo "Installing RC App '$RC_APP_FILENAME'"
+wget "$RC_APP_URL"
+tar xvjf "$RC_APP_FILENAME"
+cat > "/home/$USER/.bashrc" <<'EOF'
+__BASH_RC__
+EOF
+su dietpi -c "ssh-keygen -q -t rsa -N '' <<< $'\\ny' >/dev/null 2>&1"

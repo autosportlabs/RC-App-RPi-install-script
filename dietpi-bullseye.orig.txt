@@ -15,24 +15,24 @@ AUTO_SETUP_ACCEPT_LICENSE=0
 AUTO_SETUP_LOCALE=C.UTF-8
 
 # Keyboard Layout eg: "gb" / "us" / "de" / "fr"
-AUTO_SETUP_KEYBOARD_LAYOUT=us
+AUTO_SETUP_KEYBOARD_LAYOUT=gb
 
 # Timezone eg: "Europe/London" / "America/New_York" | Full list (TZ*): https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
-AUTO_SETUP_TIMEZONE=America/Los_Angeles
+AUTO_SETUP_TIMEZONE=Europe/London
 
 ##### Network Options #####
 # Enable Ethernet or WiFi adapter: 1=enable | 0=disable
 # - If both Ethernet and WiFi are enabled, WiFi will take priority and Ethernet will be disabled.
 # - If using WiFi, please edit dietpi-wifi.txt to pre-enter credentials.
-AUTO_SETUP_NET_ETHERNET_ENABLED=0
-AUTO_SETUP_NET_WIFI_ENABLED=1
+AUTO_SETUP_NET_ETHERNET_ENABLED=1
+AUTO_SETUP_NET_WIFI_ENABLED=0
 
 # Force Ethernet speeds: 0=automatic speed | 10 = 10Mbit | 100 = 100Mbit etc
 # - This is mainly aimed at PINE A64 which may have an HW issue that causes unstable 1Gbit link.
 AUTO_SETUP_NET_ETH_FORCE_SPEED=0
 
 # WiFi country code: 2 uppercase character value (e.g. GB US DE JP): https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2
-AUTO_SETUP_NET_WIFI_COUNTRY_CODE=US
+AUTO_SETUP_NET_WIFI_COUNTRY_CODE=GB
 
 # Enter your static network details below, if applicable.
 AUTO_SETUP_NET_USESTATIC=0
@@ -45,10 +45,10 @@ AUTO_SETUP_NET_STATIC_DNS=9.9.9.9 149.112.112.112
 AUTO_SETUP_DHCP_TO_STATIC=0
 
 # Hostname
-AUTO_SETUP_NET_HOSTNAME=RCDash
+AUTO_SETUP_NET_HOSTNAME=DietPi
 
 # Delay service starts at boot until network is established: 0=disabled | 1=enabled
-AUTO_SETUP_BOOT_WAIT_FOR_NETWORK=0
+AUTO_SETUP_BOOT_WAIT_FOR_NETWORK=1
 
 ##### Misc Options #####
 # Swap space size to generate: 0 => disable | 1 => auto | 2 and up => size in MiB
@@ -80,7 +80,7 @@ AUTO_SETUP_BACKUP_RESTORE=0
 
 ##### Software Options #####
 # SSH server choice: 0=none/custom | -1=Dropbear | -2=OpenSSH
-AUTO_SETUP_SSH_SERVER_INDEX=-2
+AUTO_SETUP_SSH_SERVER_INDEX=-1
 
 # Logging mode choice: 0=none/custom | -1=RAMlog 1h clear | -2=RAMlog 1h save clear | -3=rsyslog + logrotate
 AUTO_SETUP_LOGGING_INDEX=-1
@@ -105,17 +105,17 @@ AUTO_SETUP_BROWSER_INDEX=-1
 # DietPi-Autostart: 0=Console | 7=Console autologin | 1=Kodi | 2=Desktop autologin | 16=Desktop | 4=OpenTyrian | 5=DietPi-CloudShell | 6=Amiberry fast boot | 8=Amiberry standard boot | 9=DDX-Rebirth | 10=CAVA Spectrum | 11=Chromium kiosk | 14=Custom script (background) | 17=Custom script (foreground)
 # - This will be effective on 2nd boot, after firstrun update and installs have been done.
 # - Related software titles must be installed either on firstrun installs or via AUTO_SETUP_AUTOMATED=1 + AUTO_SETUP_INSTALL_SOFTWARE_ID (see below).
-AUTO_SETUP_AUTOSTART_TARGET_INDEX=7
+AUTO_SETUP_AUTOSTART_TARGET_INDEX=0
 # Autologin user name
 # - This user must exist before firstrun installs, otherwise it will be reverted to root.
 # - Applies to all autostart options but: 0, 6, 14 and 16
-AUTO_SETUP_AUTOSTART_LOGIN_USER=dietpi
+AUTO_SETUP_AUTOSTART_LOGIN_USER=root
 
 ##### Non-interactive Firstrun Setup #####
 # On first login, run update, initial setup and software installs without any user input
 # - Setting this to "1" is required for AUTO_SETUP_GLOBAL_PASSWORD and AUTO_SETUP_INSTALL_SOFTWARE_ID.
 # - Setting this to "1" indicates that you accept the DietPi GPLv2 license, available at /boot/dietpi-LICENSE.txt, superseding AUTO_SETUP_ACCEPT_LICENSE.
-AUTO_SETUP_AUTOMATED=1
+AUTO_SETUP_AUTOMATED=0
 
 # Global Password to be applied for the system
 # - Requires AUTO_SETUP_AUTOMATED=1
@@ -130,14 +130,14 @@ AUTO_SETUP_GLOBAL_PASSWORD=dietpi
 # - Add as many entries as you wish, one each line.
 # - DietPi will automatically install all dependencies, like ALSA/X11 for desktops etc.
 # - E.g. the following (without the leading "#") will install the LXDE desktop automatically on first boot:
-AUTO_SETUP_INSTALL_SOFTWARE_ID=21
+#AUTO_SETUP_INSTALL_SOFTWARE_ID=23
 
 #------------------------------------------------------------------------------------------------------
 ##### Misc DietPi program settings #####
 #------------------------------------------------------------------------------------------------------
 # DietPi-Survey: 1=opt in | 0=opt out | -1=ask on first call
 # - https://dietpi.com/docs/dietpi_tools/#miscellaneous (see tab 'DietPi Survey')
-SURVEY_OPTED_IN=0
+SURVEY_OPTED_IN=-1
 
 #------------------------------------------------------------------------------------------------------
 ##### DietPi-Config settings #####
@@ -183,14 +183,14 @@ CONFIG_CHECK_DNS_DOMAIN=dns9.quad9.net
 
 # Daily check for DietPi updates: 0=disable | 1=enable
 # - Checks are done by downloading a file of only 7 bytes.
-CONFIG_CHECK_DIETPI_UPDATES=0
+CONFIG_CHECK_DIETPI_UPDATES=1
 
 # Daily check for APT package updates: 0=disable | 1=check only | 2=check and upgrade automatically
 # - Upgrade logs can be found at: /var/tmp/dietpi/logs/dietpi-update_apt.log
-CONFIG_CHECK_APT_UPDATES=0
+CONFIG_CHECK_APT_UPDATES=1
 
 # Network time sync: 0=disabled | 1=boot only | 2=boot + daily | 3=boot + hourly | 4=Daemon + Drift
-CONFIG_NTP_MODE=4
+CONFIG_NTP_MODE=2
 
 # Serial Console: Set to 0 if you do not require serial console.
 CONFIG_SERIAL_CONSOLE_ENABLE=1
