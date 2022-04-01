@@ -32,13 +32,17 @@ fi
 
 if [ -f "$MOUNT_POINT/config.txt" ]
 then
+	mv "$MOUNT_POINT/config.txt" "$MOUNT_POINT/config.orig.txt"
+	cp "$MOUNT_POINT/config.orig.txt" "$MOUNT_POINT/config.hdmi.txt"
+	cp "$MOUNT_POINT/config.orig.txt" "$MOUNT_POINT/config.lcd.txt"
 	echo "Modifying config.txt"
-	sed -i "s/gpu_mem_1024=.*/gpu_mem_1024=256/" "$MOUNT_POINT/config.txt"
-	# Moved to rcdash_setup.sh to fix initial reboot issue
-	#echo "display_auto_detect=1" >> "$MOUNT_POINT/config.txt"
-	echo "ignore_lcd=1" >> "$MOUNT_POINT/config.txt"
-	echo "dtoverlay=vc4-kms-dsi-7inch" >> "$MOUNT_POINT/config.txt"
-	echo "dtoverlay=vc4-kms-v3d,noaudio" >> "$MOUNT_POINT/config.txt"
+	sed -i "s/gpu_mem_1024=.*/gpu_mem_1024=256/" "$MOUNT_POINT/config.lcd.txt"
+	sed -i "s/gpu_mem_1024=.*/gpu_mem_1024=256/" "$MOUNT_POINT/config.hdmi.txt"
+	echo "ignore_lcd=1" >> "$MOUNT_POINT/config.lcd.txt"
+	echo "ignore_lcd=1" >> "$MOUNT_POINT/config.hdmi.txt"
+	echo "dtoverlay=vc4-kms-dsi-7inch" >> "$MOUNT_POINT/config.lcd.txt"
+	echo "dtoverlay=vc4-kms-v3d,noaudio" >> "$MOUNT_POINT/config.lcd.txt"
+	echo "dtoverlay=vc4-kms-v3d,noaudio" >> "$MOUNT_POINT/config.hdmi.txt"
 fi
 
 if [ -f "$MOUNT_POINT/dietpi.txt" ]
@@ -46,6 +50,7 @@ then
 	echo "Found dietpi.txt"
 	cp "$SCRIPT_DIR/dietpi.txt" "$MOUNT_POINT/dietpi.txt"
 	cp "$SCRIPT_DIR/rcdash_setup.sh" "$MOUNT_POINT/Automation_Custom_Script.sh"
+	cp "$SCRIPT_DIR/rcdash_settings.txt" "$MOUNT_POINT/rcdash_settings.txt"
 else
        	echo "Image is missing dietpi.txt, verify if image is a DietPi image!"
 fi

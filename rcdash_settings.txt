@@ -1,0 +1,8 @@
+# Change to 0 if you want to disable wifi reconnect
+ENABLE_WIFI_RECONNECT=1
+
+# Change to 0 if you want to disable usb automounting of flash drives
+ENABLE_USB_AUTOMOUNT=1
+
+# Change to 0 if you want to disable using GPIO pin 21 for shutdown/reboot
+ENABLE_SHUTDOWN_BUTTON=1

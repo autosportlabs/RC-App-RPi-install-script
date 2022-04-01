@@ -1,5 +1,7 @@
 #!/bin/bash -e
 
+. /boot/rcdash_settings.txt
+
 RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2'`
 RC_APP_FILENAME=`basename $RC_APP_URL`
 
@@ -24,15 +26,17 @@ fi
 # Install the necessary dependencies for the RC App
 apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero
 
-# Setup wifi reconnect if not using dietpi which has it's own service
-if [ "$USER" == "pi" ]
+if [ "$ENABLE_WIFI_RECONNECT" -eq "1" ]
 then
-  cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
+  # Setup wifi reconnect if not using dietpi which has it's own service
+  if [ "$USER" == "pi" ]
+  then
+    cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
 # Run the wifi_reconnect script every minute
 * *   * * *   root    /usr/local/bin/wifi_reconnect.sh
 EOF
 
-  cat > /usr/local/bin/wifi_reconnect.sh <<'EOF'
+    cat > /usr/local/bin/wifi_reconnect.sh <<'EOF'
 #!/bin/bash 
  
 SSID=$(/sbin/iwgetid --raw) 
@@ -48,11 +52,17 @@ fi
 echo "WiFi check finished"
 EOF
 
-  chmod +x /usr/local/bin/wifi_reconnect.sh
+    chmod +x /usr/local/bin/wifi_reconnect.sh
+  else
+    systemctl enable dietpi-wifi-monitor.service
+    systemctl start dietpi-wifi-monitor.service
+  fi
 fi
 
-# Setup shutdown button support for GPIO21
-cat > /usr/local/bin/shutdown_button.py <<'EOF'
+if [ "$ENABLE_SHUTDOWN_BUTTON" -eq "1" ]
+then
+  # Setup shutdown button support for GPIO21
+  cat > /usr/local/bin/shutdown_button.py <<'EOF'
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # example gpiozero code that could be used to have a reboot
@@ -89,9 +99,10 @@ button.when_released = rls
 
 pause() # wait forever
 EOF
-chmod +x /usr/local/bin/shutdown_button.py
 
-cat > /etc/systemd/system/shutdown_button.service <<'EOF'
+  chmod +x /usr/local/bin/shutdown_button.py
+
+  cat > /etc/systemd/system/shutdown_button.service <<'EOF'
 [Unit]
 Description=GPIO shutdown button
 After=network.target
@@ -107,8 +118,9 @@ ExecStart=/usr/bin/python3 /usr/local/bin/shutdown_button.py
 WantedBy=multi-user.target
 EOF
 
-systemctl enable shutdown_button.service
-systemctl start shutdown_button.service
+  systemctl enable shutdown_button.service
+  systemctl start shutdown_button.service
+fi
 
 # Groups needed for the dietpi user to access opengl, input (touch/mouse) and usb serial ports
 adduser $USER render
@@ -116,8 +128,10 @@ adduser $USER video
 adduser $USER input
 adduser $USER dialout
 
-# Add automount rules
-cat > /usr/local/bin/automount <<'EOF'
+if [ "$ENABLE_USB_AUTOMOUNT" -eq "1" ]
+then
+  # Add automount rules
+  cat > /usr/local/bin/automount <<'EOF'
 #!/bin/bash
  
 PART=$1
@@ -132,13 +146,14 @@ do
 	fi
 done
 EOF
-chmod +x /usr/local/bin/automount
+  
+  chmod +x /usr/local/bin/automount
 
-cat > /etc/udev/rules.d/usbstick.rules <<'EOF'
+  cat > /etc/udev/rules.d/usbstick.rules <<'EOF'
 ACTION=="add", KERNEL=="sd[a-z][0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
 EOF
 
-cat > /lib/systemd/system/usbstick-handler@.service <<'EOF'
+  cat > /lib/systemd/system/usbstick-handler@.service <<'EOF'
 [Unit]
 Description=Mount USB sticks
 BindsTo=dev-%i.device
@@ -150,6 +165,7 @@ RemainAfterExit=yes
 ExecStart=/usr/local/bin/automount %I
 ExecStop=/usr/bin/pumount /dev/%I
 EOF
+fi
 
 # Download and install the RC App
 cd /opt
