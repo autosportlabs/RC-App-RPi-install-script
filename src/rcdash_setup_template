@@ -90,8 +90,10 @@ fi
 # Download and install the RC App
 cd /opt
 echo "Installing RC App '$RC_APP_FILENAME'"
-wget "$RC_APP_URL"
+wget -q "$RC_APP_URL"
 tar xvjf "$RC_APP_FILENAME"
+# Remove conflicting libstdc++
+mv /opt/racecapture/libstdc++.so.6 /opt/racecapture/libstdc++.so.6.bak
 cat > "/home/$USER/.bashrc" <<'EOF'
 __BASH_RC__
 EOF
