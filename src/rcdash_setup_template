@@ -24,7 +24,7 @@ else
 fi
 
 # Install the necessary dependencies for the RC App
-apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero
+apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero ratpoison xserver-xorg xserver-xorg-legacy xinit
 
 if [ "$ENABLE_WIFI_RECONNECT" -eq "1" ]
 then
@@ -94,7 +94,15 @@ wget -q "$RC_APP_URL"
 tar xvjf "$RC_APP_FILENAME"
 # Remove conflicting libstdc++
 mv /opt/racecapture/libstdc++.so.6 /opt/racecapture/libstdc++.so.6.bak
+
 cat > "/home/$USER/.bashrc" <<'EOF'
 __BASH_RC__
 EOF
+chown $USER:$USER /home/$USER/.bashrc
+
+cat > "/home/$USER/.xinitrc" <<'EOF'
+__XINIT_RC__
+EOF
+chown $USER:$USER /home/$USER/.xinitrc
+
 su dietpi -c "ssh-keygen -q -t rsa -N '' <<< $'\\ny' >/dev/null 2>&1"

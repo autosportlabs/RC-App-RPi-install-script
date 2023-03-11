@@ -24,7 +24,7 @@ else
 fi
 
 # Install the necessary dependencies for the RC App
-apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero
+apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero ratpoison xserver-xorg xserver-xorg-legacy xinit
 
 if [ "$ENABLE_WIFI_RECONNECT" -eq "1" ]
 then
@@ -170,8 +170,11 @@ fi
 # Download and install the RC App
 cd /opt
 echo "Installing RC App '$RC_APP_FILENAME'"
-wget "$RC_APP_URL"
+wget -q "$RC_APP_URL"
 tar xvjf "$RC_APP_FILENAME"
+# Remove conflicting libstdc++
+mv /opt/racecapture/libstdc++.so.6 /opt/racecapture/libstdc++.so.6.bak
+
 cat > "/home/$USER/.bashrc" <<'EOF'
 echo "Starting RaceCapture, Ctrl-c to abort!"
 for i in $(seq 2 -1 0)
@@ -180,6 +183,18 @@ do
   sleep 1
   echo -ne '\b'
 done
-/opt/racecapture/run_racecapture.sh
+#/opt/racecapture/run_racecapture.sh
+if [ -z "$SSH_CLIENT" ] || [ -z "$SSH_TTY" ]; then
+	xinit -- -nocursor -dpms -s 0
+fi
 EOF
+chown $USER:$USER /home/$USER/.bashrc
+
+cat > "/home/$USER/.xinitrc" <<'EOF'
+#!/bin/sh
+ratpoison&
+/opt/racecapture/race_capture -a
+EOF
+chown $USER:$USER /home/$USER/.xinitrc
+
 su dietpi -c "ssh-keygen -q -t rsa -N '' <<< $'\\ny' >/dev/null 2>&1"

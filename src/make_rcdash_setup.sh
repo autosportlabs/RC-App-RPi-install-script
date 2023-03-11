@@ -8,6 +8,9 @@ replace() {
 
 cp rcdash_setup_template rcdash_setup.sh
 
+# Xinitrc
+replace "__XINIT_RC__" "xinitrc"
+
 # Wifi reconnect
 replace "__WIFI_RECONNECT_CRON__" "wifi_reconnect.cron"
 replace "__WIFI_RECONNECT__" "wifi_reconnect.sh"

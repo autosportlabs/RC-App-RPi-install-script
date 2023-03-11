@@ -1,0 +1,3 @@
+#!/bin/sh
+ratpoison&
+/opt/racecapture/race_capture -a
