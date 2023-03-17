@@ -1,7 +1,5 @@
 #!/bin/bash -e
 
-. /boot/rcdash_settings.txt
-
 RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2'`
 RC_APP_FILENAME=`basename $RC_APP_URL`
 
@@ -16,20 +14,69 @@ then
        	USER=dietpi
 	# Make dietpi not wait on network during boot sequence
 	sed -i 's/Type=oneshot/Type=simple/' /etc/systemd/system/ifup@.service.d/dietpi.conf
+        . /boot/rcdash_settings.txt
 else
-	USER=pi
+	if [ -z "$SUDO_USER" ]
+	then
+		echo "Must be run via sudo"
+		exit
+	fi
+
+	USER=$SUDO_USER
 	sed -i '1 s/$/ logo.nologo consoleblank=0/' /boot/cmdline.txt
 	echo "disable-spash=1" >> /boot/config.txt
 	echo "gpu_mem=256" >> /boot/config.txt
+	SELECTIONS=$(whiptail --title "Features" --checklist \
+		"Choose features to enable" 20 78 4 \
+		WIFI_AUTO_RECONNECT "Automatically reconnect wifi" ON \
+		USB_AUTO_MOUNT "Mount usb drives under /media/usb#" ON \
+		GPIO_SHUTDOWN "Enable GPIO Pin21 shutdown/reboot" OFF 3>&1 1>&2 2>&3)
+	exitstatus=$?
+	if [ $exitstatus == 0 ]; then
+	  for i in $SELECTIONS
+	  do
+		 case $i in
+			 \"WIFI_AUTO_RECONNECT\")
+				 ENABLE_WIFI_RECONNECT=1
+				 ;;
+			 \"USB_AUTO_MOUNT\")
+				 ENABLE_USB_AUTOMOUNT=1
+				 ;;
+			 \"GPIO_SHUTDOWN\")
+				 ENABLE_SHUTDOWN_BUTTON=1
+				 ;;
+			 *)
+				 echo "Uknown option"
+				 exit 1
+				 ;;
+		 esac
+	 done
+        else
+	        echo "Cancelling installation"
+		exit 1
+	fi
 fi
 
 # Install the necessary dependencies for the RC App
+echo "Installing necessary packages"
 apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero ratpoison xserver-xorg xserver-xorg-legacy xinit
 
-if [ "$ENABLE_WIFI_RECONNECT" -eq "1" ]
+# Groups needed for the dietpi user to access opengl, input (touch/mouse) and usb serial ports
+echo "Adding user to necessary groups"
+adduser $USER render
+adduser $USER video
+adduser $USER input
+adduser $USER dialout
+
+# No .config directory can cause RC App to fail
+mkdir -p /home/$USER/.config/racecapture
+chown $USER:$USER /home/$USER/.config/racecapture
+
+if [ "$ENABLE_WIFI_RECONNECT" == "1" ]
 then
+  echo "Enabling Wifi auto-reconnect"
   # Setup wifi reconnect if not using dietpi which has it's own service
-  if [ "$USER" == "pi" ]
+  if [ "$USER" != "dietpi" ]
   then
     cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
 # Run the wifi_reconnect script every minute
@@ -59,8 +106,9 @@ EOF
   fi
 fi
 
-if [ "$ENABLE_SHUTDOWN_BUTTON" -eq "1" ]
+if [ "$ENABLE_SHUTDOWN_BUTTON" == "1" ]
 then
+  echo "Enabling GPIO shutdown button"
   # Setup shutdown button support for GPIO21
   cat > /usr/local/bin/shutdown_button.py <<'EOF'
 #!/usr/bin/python3
@@ -122,14 +170,10 @@ EOF
   systemctl start shutdown_button.service
 fi
 
-# Groups needed for the dietpi user to access opengl, input (touch/mouse) and usb serial ports
-adduser $USER render
-adduser $USER video
-adduser $USER input
-adduser $USER dialout
 
-if [ "$ENABLE_USB_AUTOMOUNT" -eq "1" ]
+if [ "$ENABLE_USB_AUTOMOUNT" == "1" ]
 then
+  echo "Enabling USB Automount"
   # Add automount rules
   cat > /usr/local/bin/automount <<'EOF'
 #!/bin/bash
@@ -168,27 +212,53 @@ EOF
 fi
 
 # Download and install the RC App
-cd /opt
 echo "Installing RC App '$RC_APP_FILENAME'"
-wget -q "$RC_APP_URL"
-tar xvjf "$RC_APP_FILENAME"
+cd /opt
+if [ -f "$RC_APP_FILENAME" ]; then
+  echo "RC App '$RC_APP_FILENAME' already downloaded"
+else
+  echo "Downloading..."
+  wget -q "$RC_APP_URL"
+fi
+
+if [ -d "racecapture" ]; then
+    if (whiptail --title "Overwrite Installation" --yesno "Overwrite the existing racecapture installation." 8 78); then
+        echo "Removing old installation"
+	rm -rf racecapture
+        echo "Extracting '$RC_APP_FILENAME'"
+        tar xjf "$RC_APP_FILENAME"
+    else
+        echo "Skipping"
+    fi
+else
+    echo "Extracting '$RC_APP_FILENAME'"
+    tar xjf "$RC_APP_FILENAME"
+fi
 # Remove conflicting libstdc++
-mv /opt/racecapture/libstdc++.so.6 /opt/racecapture/libstdc++.so.6.bak
+#mv /opt/racecapture/libstdc++.so.6 /opt/racecapture/libstdc++.so.6.bak
 
 cat > "/home/$USER/.bashrc" <<'EOF'
-echo "Starting RaceCapture, Ctrl-c to abort!"
-for i in $(seq 2 -1 0)
-do
-  echo -n $i
-  sleep 1
-  echo -ne '\b'
-done
-#/opt/racecapture/run_racecapture.sh
-if [ -z "$SSH_CLIENT" ] || [ -z "$SSH_TTY" ]; then
-	xinit -- -nocursor -dpms -s 0
+if shopt -q login_shell; then
+  if [ -z "$SSH_CLIENT" ] || [ -z "$SSH_TTY" ]; then
+    echo "Starting RaceCapture, Ctrl-c to abort!"
+    for i in $(seq 2 -1 0)
+    do
+      echo -n $i
+      sleep 1
+      echo -ne '\b'
+    done
+    xinit -- -nocursor -dpms -s 0
+  fi
 fi
 EOF
 chown $USER:$USER /home/$USER/.bashrc
+
+cat > "/home/$USER/.ratpoisonrc" <<'EOF'
+set startupmessage 0
+echo "Starting RaceCapture...  Ctrl+t q to quit"
+bind q quit
+EOF
+chown $USER:$USER /home/$USER/.ratpoisonrc
 
 cat > "/home/$USER/.xinitrc" <<'EOF'
 #!/bin/sh
@@ -196,5 +266,3 @@ ratpoison&
 /opt/racecapture/race_capture -a
 EOF
 chown $USER:$USER /home/$USER/.xinitrc
-
-su dietpi -c "ssh-keygen -q -t rsa -N '' <<< $'\\ny' >/dev/null 2>&1"
