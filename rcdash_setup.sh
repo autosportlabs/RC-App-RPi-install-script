@@ -255,14 +255,14 @@ chown $USER:$USER /home/$USER/.bashrc
 
 cat > "/home/$USER/.ratpoisonrc" <<'EOF'
 set startupmessage 0
-echo "Starting RaceCapture...  Ctrl+t q to quit"
+echo Starting RaceCapture...
 bind q quit
+exec /opt/racecapture/run_racecapture_rpi.sh -w -- -a
 EOF
 chown $USER:$USER /home/$USER/.ratpoisonrc
 
 cat > "/home/$USER/.xinitrc" <<'EOF'
 #!/bin/sh
-ratpoison&
-/opt/racecapture/race_capture -a
+ratpoison
 EOF
 chown $USER:$USER /home/$USER/.xinitrc
