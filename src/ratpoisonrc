@@ -1,3 +1,4 @@
 set startupmessage 0
-echo "Starting RaceCapture...  Ctrl+t q to quit"
+echo Starting RaceCapture...
 bind q quit
+exec /opt/racecapture/run_racecapture_rpi.sh -w -- -a
