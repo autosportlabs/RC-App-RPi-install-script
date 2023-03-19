@@ -3,10 +3,27 @@
 RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2'`
 RC_APP_FILENAME=`basename $RC_APP_URL`
 RPI_MODEL=$(tr -d '\0' </proc/device-tree/model)
+REBOOT_NEEDED=0
 
 function yesno() {
 	whiptail --title "$1" --defaultno --yesno "$2" 20 70 4 3>&1 1>&2 2>&3
-	echo $?
+	exitstatus=$?
+	# Invert truthines
+	if [ $exitstatus = 0 ]; then
+		echo 1
+	else
+		echo 0
+	fi
+}
+
+function password_prompt() {
+	PASSWORD=$(whiptail --title "$1" --passwordbox "$2" 20 70 3>&1 1>&2 2>&3)
+	exitstatus=$?
+	if [ $exitstatus != 0 ]; then
+		echo "Password cahcelled, default to no password"
+		PASSWORD=""
+	fi
+	echo $PASSWORD
 }
 
 if [ "$EUID" -ne 0 ] 
@@ -55,11 +72,12 @@ else
 		if (whiptail --title "RPi3 Official Display" --yesno "Enable RPi Official touchscreen support?\n\nNote: only select yes if using an LCD display connected directly to your RPI, this will disable HDMI output!" 20 70 4); then
 			if ! grep -q "^dtoverlay=vc4-kms-dsi-7inch" /boot/config.txt; then
 				echo "dtoverlay=vc4-kms-dsi-7inch" >> /boot/cmdline.txt
+				REBOOT_NEEDED=1
 			fi
 		fi
 	fi
 
-	MODE=$(whiptail --title "Mode" --radiolist \
+	MODE=$(whiptail --title "Mode" --notags --radiolist \
 		"How do you want to run Race Capture?" 20 70 4 \
 		FB "Direct Framebuffer" ON \
 		X11 "Using X11 (allows VNC)" OFF 3>&1 1>&2 2>&3)
@@ -69,13 +87,46 @@ else
 		exit 1
 	fi
 
-	if [ "$MODE" = "X11" ]; then
-		VNC=$(yesno "VNC" "Enable VNC?")
+	if [[ $MODE == "X11" ]]; then
+		ENABLE_VNC=$(yesno "VNC" "Enable VNC?")
 	fi
 
-	WATCHDOG=$(yesno "Watchdog" "Enable auto-restart watchdog?")
+	if [[ $ENABLE_VNC == "1" ]]; then
+		VNC_PASSWORD=$(password_prompt "VNC Password" "Please enter vnc password, leave blank for no password.")
+	fi
 
-	SELECTIONS=$(whiptail --title "Extra Features" --checklist \
+	APP_SELECTIONS=$(whiptail --title "App Features" --notags --separate-output --checklist \
+		"Choose app features to enable" 20 78 4 \
+		WATCHDOG "Enable auto-restart watchdog" OFF \
+		CURSOR "Enable mouse pointer" OFF \
+		KEYBOARD "Enable touchscreen keyboard" OFF 3>&1 1>&2 2>&3)
+	exitstatus=$?
+	if [ $exitstatus == 0 ]; then
+		for i in $APP_SELECTIONS
+		do
+			case $i in
+				WATCHDOG)
+					ENABLE_WATCHDOG=1
+					;;
+				CURSOR)
+					ENABLE_CURSOR=1
+					;;
+				KEYBOARD)
+					ENABLE_TOUCH_KEYBOARD=1
+					;;
+				*)
+					echo "Unknown selection!!!"
+					exit 1
+					;;
+			esac
+		done
+	else
+	        echo "Cancelling installation"
+		exit 1
+	fi
+
+
+	SELECTIONS=$(whiptail --title "Extra Features" --notags --separate-output --checklist \
 		"Choose features to enable" 20 78 4 \
 		WIFI_AUTO_RECONNECT "Automatically reconnect wifi" ON \
 		USB_AUTO_MOUNT "Mount usb drives under /media/usb#" ON \
@@ -85,13 +136,13 @@ else
 	  for i in $SELECTIONS
 	  do
 		 case $i in
-			 \"WIFI_AUTO_RECONNECT\")
+			 WIFI_AUTO_RECONNECT)
 				 ENABLE_WIFI_RECONNECT=1
 				 ;;
-			 \"USB_AUTO_MOUNT\")
+			 USB_AUTO_MOUNT)
 				 ENABLE_USB_AUTOMOUNT=1
 				 ;;
-			 \"GPIO_SHUTDOWN\")
+			 GPIO_SHUTDOWN)
 				 ENABLE_SHUTDOWN_BUTTON=1
 				 ;;
 			 *)
@@ -115,7 +166,7 @@ VNC_PACKAGES="x11vnc"
 PACKAGES_TO_INSTALL="${BASE_PACKAGES}"
 if [[ $MODE == "X11" ]]; then
 	PACKAGES_TO_INSTALL+=" ${X11_PACKAGES}"
-	if [[ $VNC == "0" ]]; then
+	if [[ $ENABLE_VNC == "1" ]]; then
 		PACKAGES_TO_INSTALL+=" ${VNC_PACKAGES}"
 	fi
 fi
@@ -128,22 +179,35 @@ adduser $USER video
 adduser $USER input
 adduser $USER dialout
 
+# Now that x11vnc is installed we can setup the vnc password, if necessary
+if [[ $ENABLE_VNC == "1" ]]; then
+	VNC_CMD="x11vnc -display :0 -many -noxdamage"
+	if [[ $VNC_PASSWORD != "" ]]; then
+		mkdir -p /home/$USER/.vnc
+		x11vnc -storepasswd "${VNC_PASSWORD}" /home/$USER/.vnc/passwd
+		chown -R $USER:$USER /home/$USER/.vnc
+		VNC_CMD+=" -usepw &"
+       	else
+	       	VNC_CMD+=" -nopw &"
+       	fi
+else
+       	VNC_CMD=""
+fi
+
 # No .config directory can cause RC App to fail
 mkdir -p /home/$USER/.config/racecapture
 chown $USER:$USER /home/$USER/.config/racecapture
 
-if [[ $ENABLE_WIFI_RECONNECT == "1" ]] 
-then
-  echo "Enabling Wifi auto-reconnect"
-  # Setup wifi reconnect if not using dietpi which has it's own service
-  if [[ $USER != "dietpi" ]]
-  then
-    cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
+if [[ $ENABLE_WIFI_RECONNECT == "1" ]]; then
+       	echo "Enabling Wifi auto-reconnect"
+       	# Setup wifi reconnect if not using dietpi which has it's own service
+       	if [[ $USER != "dietpi" ]]; then
+		cat > /etc/cron.d/wifi_reconnect.cron <<-'EOF'
 # Run the wifi_reconnect script every minute
 * *   * * *   root    /usr/local/bin/wifi_reconnect.sh
-EOF
+		EOF
 
-    cat > /usr/local/bin/wifi_reconnect.sh <<'EOF'
+		cat > /usr/local/bin/wifi_reconnect.sh <<-'EOF'
 #!/bin/bash 
  
 SSID=$(/sbin/iwgetid --raw) 
@@ -157,20 +221,19 @@ then
 fi 
 
 echo "WiFi check finished"
-EOF
+		EOF
 
-    chmod +x /usr/local/bin/wifi_reconnect.sh
-  else
-    systemctl enable dietpi-wifi-monitor.service
-    systemctl start dietpi-wifi-monitor.service
-  fi
+		chmod +x /usr/local/bin/wifi_reconnect.sh
+       	else
+	       	systemctl enable dietpi-wifi-monitor.service
+	       	systemctl start dietpi-wifi-monitor.service
+       	fi
 fi
 
-if [[ $ENABLE_SHUTDOWN_BUTTON == "1" ]]
-then
-  echo "Enabling GPIO shutdown button"
-  # Setup shutdown button support for GPIO21
-  cat > /usr/local/bin/shutdown_button.py <<'EOF'
+if [[ $ENABLE_SHUTDOWN_BUTTON == "1" ]]; then
+       	echo "Enabling GPIO shutdown button"
+       	# Setup shutdown button support for GPIO21
+       	cat > /usr/local/bin/shutdown_button.py <<-'EOF'
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # example gpiozero code that could be used to have a reboot
@@ -206,11 +269,11 @@ button.when_held = hld
 button.when_released = rls
 
 pause() # wait forever
-EOF
+	EOF
 
-  chmod +x /usr/local/bin/shutdown_button.py
+	chmod +x /usr/local/bin/shutdown_button.py
 
-  cat > /etc/systemd/system/shutdown_button.service <<'EOF'
+	cat > /etc/systemd/system/shutdown_button.service <<-'EOF'
 [Unit]
 Description=GPIO shutdown button
 After=network.target
@@ -224,18 +287,17 @@ ExecStart=/usr/bin/python3 /usr/local/bin/shutdown_button.py
 
 [Install]
 WantedBy=multi-user.target
-EOF
+	EOF
 
-  systemctl enable shutdown_button.service
-  systemctl start shutdown_button.service
+	systemctl enable shutdown_button.service
+       	systemctl start shutdown_button.service
 fi
 
 
-if [[ $ENABLE_USB_AUTOMOUNT == "1" ]]
-then
-  echo "Enabling USB Automount"
-  # Add automount rules
-  cat > /usr/local/bin/automount <<'EOF'
+if [[ $ENABLE_USB_AUTOMOUNT == "1" ]]; then
+       	echo "Enabling USB Automount"
+       	# Add automount rules
+       	cat > /usr/local/bin/automount <<-'EOF'
 #!/bin/bash
  
 PART=$1
@@ -249,15 +311,15 @@ do
 		exit 0
 	fi
 done
-EOF
+	EOF
   
-  chmod +x /usr/local/bin/automount
+	chmod +x /usr/local/bin/automount
 
-  cat > /etc/udev/rules.d/usbstick.rules <<'EOF'
+	cat > /etc/udev/rules.d/usbstick.rules <<-'EOF'
 ACTION=="add", KERNEL=="sd[a-z][0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
-EOF
+	EOF
 
-  cat > /lib/systemd/system/usbstick-handler@.service <<'EOF'
+	cat > /lib/systemd/system/usbstick-handler@.service <<-'EOF'
 [Unit]
 Description=Mount USB sticks
 BindsTo=dev-%i.device
@@ -268,45 +330,56 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/bin/automount %I
 ExecStop=/usr/bin/pumount /dev/%I
-EOF
+	EOF
 fi
 
 # Download and install the RC App
 echo "Installing RC App '$RC_APP_FILENAME'"
 cd /opt
 if [ -f "$RC_APP_FILENAME" ]; then
-  echo "RC App '$RC_APP_FILENAME' already downloaded"
+       	echo "RC App '$RC_APP_FILENAME' already downloaded"
 else
-  echo "Downloading..."
-  wget -q -show-progress "$RC_APP_URL"
+       	echo "Downloading..."
+       	wget -q --progress=bar --show-progress "$RC_APP_URL"
 fi
 
 if [ -d "racecapture" ]; then
-    if (whiptail --title "Overwrite Installation" --yesno "Overwrite the existing racecapture installation." 20 70 4); then
-        echo "Removing old installation"
-	rm -rf racecapture
-        echo "Extracting '$RC_APP_FILENAME'"
-        pv "$RC_APP_FILENAME" | tar xj
-    else
-        echo "Skipping"
-    fi
+       	if (whiptail --title "Overwrite Installation" --yesno "Overwrite the existing racecapture installation." 20 70 4); then
+	       	echo "Removing old installation"
+	       	rm -rf racecapture
+	       	echo "Extracting '$RC_APP_FILENAME'"
+	       	pv "$RC_APP_FILENAME" | tar xj
+       	else
+	       	echo "Skipping"
+       	fi
 else
-    echo "Extracting '$RC_APP_FILENAME'"
-    pv "$RC_APP_FILENAME" | tar xj
+       	echo "Extracting '$RC_APP_FILENAME'"
+       	pv "$RC_APP_FILENAME" | tar xj
 fi
 
-if [[ $WATCHDOG == "0" ]]; then
-  RC_SCRIPT_ARGS="-w 1 -- -a"
+RC_SCRIPT_ARGS="-- -a -c graphics:show_cursor:0"
+if [[ $ENABLE_WATCHDOG == "1" ]]; then
+       	RC_SCRIPT_ARGS="-w 1 ${RC_SCRIPT_ARGS}"
+fi
+
+# Enable cusor module if requested
+if [[ $ENABLE_CURSOR == "1" ]]; then
+       	RC_SCRIPT_ARGS+=" -m cursor"
+fi
+
+# Enable virtual keyboard if requeted
+if [[ $ENABLE_TOUCH_KEYBOARD == "1" ]]; then
+       	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:systemanddock"
 else
-  RC_SCRIPT_ARGS="-- -a"
+       	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:system"
 fi
 
 RC_LAUNCH_COMMAND="/opt/racecapture/run_racecapture_rpi.sh $RC_SCRIPT_ARGS"
 
 if [[ $MODE == "X11" ]]; then
-  BASH_LAUNCH_CMD="xinit -- -nocursor -dpms -s 0"
+       	BASH_LAUNCH_CMD="xinit -- -nocursor -dpms -s 0"
 else
-  BASH_LAUNCH_CMD="$RC_LAUNCH_COMMAND"
+       	BASH_LAUNCH_CMD="$RC_LAUNCH_COMMAND"
 fi
 
 cat > "/home/$USER/.bashrc" <<EOF
@@ -326,24 +399,26 @@ EOF
 chown $USER:$USER /home/$USER/.bashrc
 
 if [[ $MODE == "X11" ]]; then
-cat > "/home/$USER/.ratpoisonrc" <<EOF
+	cat > "/home/$USER/.ratpoisonrc" <<-EOF
 set startupmessage 0
 echo Starting RaceCapture...
 bind q quit
 exec $RC_LAUNCH_COMMAND
-EOF
-chown $USER:$USER /home/$USER/.ratpoisonrc
+	EOF
+	chown $USER:$USER /home/$USER/.ratpoisonrc
 
-  if [[ $VNC == "0" ]]; then
-	  VNC_CMD="x11vnc -display :0 -many -noxdamage"
-  else
-	  VNC_CMD=""
-  fi
 
-cat > "/home/$USER/.xinitrc" <<EOF
+	cat > "/home/$USER/.xinitrc" <<-EOF
 #!/bin/sh
 $VNC_CMD
 ratpoison
-EOF
-chown $USER:$USER /home/$USER/.xinitrc
+	EOF
+	chown $USER:$USER /home/$USER/.xinitrc
+fi
+
+echo "Installation complete!!"
+if [[ $REBOOT_NEEDED == "1" ]]; then
+	echo "A reboot is required for full changes to take effect, please reboot now!"
+else
+	echo "Upon next login the RaceCapture app should auto start, please logout and login!"
 fi
