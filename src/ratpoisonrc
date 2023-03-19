@@ -1,4 +1,4 @@
 set startupmessage 0
 echo Starting RaceCapture...
 bind q quit
-exec /opt/racecapture/run_racecapture_rpi.sh -w -- -a
+exec $RC_LAUNCH_COMMAND

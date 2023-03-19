@@ -2,6 +2,12 @@
 
 RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2'`
 RC_APP_FILENAME=`basename $RC_APP_URL`
+RPI_MODEL=$(tr -d '\0' </proc/device-tree/model)
+
+function yesno() {
+	whiptail --title "$1" --defaultno --yesno "$2" 20 70 4 3>&1 1>&2 2>&3
+	echo $?
+}
 
 if [ "$EUID" -ne 0 ] 
 then 
@@ -23,10 +29,53 @@ else
 	fi
 
 	USER=$SUDO_USER
-	sed -i '1 s/$/ logo.nologo consoleblank=0/' /boot/cmdline.txt
-	echo "disable-spash=1" >> /boot/config.txt
-	echo "gpu_mem=256" >> /boot/config.txt
-	SELECTIONS=$(whiptail --title "Features" --checklist \
+
+	# Disable console blanking
+	if ! grep -q "logo\.nologo" /boot/cmdline.txt; then
+	       	sed -i '1 s/$/ logo.nologo/' /boot/cmdline.txt
+	fi
+	if ! grep -q "consoleblank=0" /boot/cmdline.txt; then
+	       	sed -i '1 s/$/ consoleblank=0/' /boot/cmdline.txt
+	fi
+
+	# Disable splash screen
+	if ! grep -q "^disable_splash" /boot/config.txt; then
+	       	echo "disable_splash=1" >> /boot/config.txt
+	fi
+	# Set appropriate gpu memory
+	if ! grep -q "^gpu_mem=256" /boot/config.txt; then
+		if grep -q "^gpu_mem=" /boot/config.txt; then
+			sed -i '$s/^gpu_mem=.*/gpu_mem=256/' /boot/cmdline.txt
+		else
+		       	echo "gpu_mem=256" >> /boot/config.txt
+		fi
+	fi
+
+	if [[ $MODEL == "Raspberry Pi 3"* ]]; then
+		if (whiptail --title "RPi3 Official Display" --yesno "Enable RPi Official touchscreen support?\n\nNote: only select yes if using an LCD display connected directly to your RPI, this will disable HDMI output!" 20 70 4); then
+			if ! grep -q "^dtoverlay=vc4-kms-dsi-7inch" /boot/config.txt; then
+				echo "dtoverlay=vc4-kms-dsi-7inch" >> /boot/cmdline.txt
+			fi
+		fi
+	fi
+
+	MODE=$(whiptail --title "Mode" --radiolist \
+		"How do you want to run Race Capture?" 20 70 4 \
+		FB "Direct Framebuffer" ON \
+		X11 "Using X11 (allows VNC)" OFF 3>&1 1>&2 2>&3)
+	exitstatus=$?
+	if [ $exitstatus != 0 ]; then
+	        echo "Cancelling installation"
+		exit 1
+	fi
+
+	if [ "$MODE" = "X11" ]; then
+		VNC=$(yesno "VNC" "Enable VNC?")
+	fi
+
+	WATCHDOG=$(yesno "Watchdog" "Enable auto-restart watchdog?")
+
+	SELECTIONS=$(whiptail --title "Extra Features" --checklist \
 		"Choose features to enable" 20 78 4 \
 		WIFI_AUTO_RECONNECT "Automatically reconnect wifi" ON \
 		USB_AUTO_MOUNT "Mount usb drives under /media/usb#" ON \
@@ -59,7 +108,18 @@ fi
 
 # Install the necessary dependencies for the RC App
 echo "Installing necessary packages"
-apt-get -y install mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount python3-gpiozero ratpoison xserver-xorg xserver-xorg-legacy xinit
+BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero"
+X11_PACKAGES="ratpoison xserver-xorg xserver-xorg-legacy xinit"
+VNC_PACKAGES="x11vnc"
+
+PACKAGES_TO_INSTALL="${BASE_PACKAGES}"
+if [[ $MODE == "X11" ]]; then
+	PACKAGES_TO_INSTALL+=" ${X11_PACKAGES}"
+	if [[ $VNC == "0" ]]; then
+		PACKAGES_TO_INSTALL+=" ${VNC_PACKAGES}"
+	fi
+fi
+apt-get -y install $PACKAGES_TO_INSTALL
 
 # Groups needed for the dietpi user to access opengl, input (touch/mouse) and usb serial ports
 echo "Adding user to necessary groups"
@@ -72,11 +132,11 @@ adduser $USER dialout
 mkdir -p /home/$USER/.config/racecapture
 chown $USER:$USER /home/$USER/.config/racecapture
 
-if [ "$ENABLE_WIFI_RECONNECT" == "1" ]
+if [[ $ENABLE_WIFI_RECONNECT == "1" ]] 
 then
   echo "Enabling Wifi auto-reconnect"
   # Setup wifi reconnect if not using dietpi which has it's own service
-  if [ "$USER" != "dietpi" ]
+  if [[ $USER != "dietpi" ]]
   then
     cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
 __WIFI_RECONNECT_CRON__
@@ -93,7 +153,7 @@ EOF
   fi
 fi
 
-if [ "$ENABLE_SHUTDOWN_BUTTON" == "1" ]
+if [[ $ENABLE_SHUTDOWN_BUTTON == "1" ]]
 then
   echo "Enabling GPIO shutdown button"
   # Setup shutdown button support for GPIO21
@@ -112,7 +172,7 @@ EOF
 fi
 
 
-if [ "$ENABLE_USB_AUTOMOUNT" == "1" ]
+if [[ $ENABLE_USB_AUTOMOUNT == "1" ]]
 then
   echo "Enabling USB Automount"
   # Add automount rules
@@ -138,36 +198,56 @@ if [ -f "$RC_APP_FILENAME" ]; then
   echo "RC App '$RC_APP_FILENAME' already downloaded"
 else
   echo "Downloading..."
-  wget -q "$RC_APP_URL"
+  wget -q -show-progress "$RC_APP_URL"
 fi
 
 if [ -d "racecapture" ]; then
-    if (whiptail --title "Overwrite Installation" --yesno "Overwrite the existing racecapture installation." 8 78); then
+    if (whiptail --title "Overwrite Installation" --yesno "Overwrite the existing racecapture installation." 20 70 4); then
         echo "Removing old installation"
 	rm -rf racecapture
         echo "Extracting '$RC_APP_FILENAME'"
-        tar xjf "$RC_APP_FILENAME"
+        pv "$RC_APP_FILENAME" | tar xj
     else
         echo "Skipping"
     fi
 else
     echo "Extracting '$RC_APP_FILENAME'"
-    tar xjf "$RC_APP_FILENAME"
+    pv "$RC_APP_FILENAME" | tar xj
 fi
-# Remove conflicting libstdc++
-#mv /opt/racecapture/libstdc++.so.6 /opt/racecapture/libstdc++.so.6.bak
 
-cat > "/home/$USER/.bashrc" <<'EOF'
+if [[ $WATCHDOG == "0" ]]; then
+  RC_SCRIPT_ARGS="-w 1 -- -a"
+else
+  RC_SCRIPT_ARGS="-- -a"
+fi
+
+RC_LAUNCH_COMMAND="/opt/racecapture/run_racecapture_rpi.sh $RC_SCRIPT_ARGS"
+
+if [[ $MODE == "X11" ]]; then
+  BASH_LAUNCH_CMD="xinit -- -nocursor -dpms -s 0"
+else
+  BASH_LAUNCH_CMD="$RC_LAUNCH_COMMAND"
+fi
+
+cat > "/home/$USER/.bashrc" <<EOF
 __BASH_RC__
 EOF
 chown $USER:$USER /home/$USER/.bashrc
 
-cat > "/home/$USER/.ratpoisonrc" <<'EOF'
+if [[ $MODE == "X11" ]]; then
+cat > "/home/$USER/.ratpoisonrc" <<EOF
 __RATPOISON_RC__
 EOF
 chown $USER:$USER /home/$USER/.ratpoisonrc
 
-cat > "/home/$USER/.xinitrc" <<'EOF'
+  if [[ $VNC == "0" ]]; then
+	  VNC_CMD="x11vnc -display :0 -many -noxdamage"
+  else
+	  VNC_CMD=""
+  fi
+
+cat > "/home/$USER/.xinitrc" <<EOF
 __XINIT_RC__
 EOF
 chown $USER:$USER /home/$USER/.xinitrc
+fi
