@@ -168,7 +168,7 @@ fi
 # Install the necessary dependencies for the RC App
 echo "Installing necessary packages"
 BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero"
-X11_PACKAGES="ratpoison xserver-xorg xserver-xorg-legacy xinit"
+X11_PACKAGES="xserver-xorg xserver-xorg-legacy xinit"
 VNC_PACKAGES="x11vnc"
 
 PACKAGES_TO_INSTALL="${BASE_PACKAGES}"
@@ -407,19 +407,10 @@ EOF
 chown $USER:$USER /home/$USER/.bashrc
 
 if [[ $MODE == "X11" ]]; then
-	cat > "/home/$USER/.ratpoisonrc" <<-EOF
-set startupmessage 0
-echo Starting RaceCapture...
-bind q quit
-exec $RC_LAUNCH_COMMAND
-	EOF
-	chown $USER:$USER /home/$USER/.ratpoisonrc
-
-
 	cat > "/home/$USER/.xinitrc" <<-EOF
 #!/bin/sh
 $VNC_CMD
-ratpoison
+$RC_LAUNCH_COMMAND
 	EOF
 	chown $USER:$USER /home/$USER/.xinitrc
 fi
