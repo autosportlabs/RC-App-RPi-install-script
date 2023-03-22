@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 
 RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2'`
 RC_APP_FILENAME=`basename $RC_APP_URL`
@@ -6,7 +6,7 @@ RPI_MODEL=$(tr -d '\0' </proc/device-tree/model)
 REBOOT_NEEDED=0
 
 function yesno() {
-	whiptail --title "$1" --defaultno --yesno "$2" 20 70 4 3>&1 1>&2 2>&3
+	whiptail --title "$1" --yesno "$2" 20 70 4 3>&1 1>&2 2>&3
 	exitstatus=$?
 	# Invert truthines
 	if [ $exitstatus = 0 ]; then
@@ -64,7 +64,15 @@ else
 		if grep -q "^gpu_mem=" /boot/config.txt; then
 			sed -i '$s/^gpu_mem=.*/gpu_mem=256/' /boot/cmdline.txt
 		else
-		       	echo "gpu_mem=256" >> /boot/config.txt
+			echo "gpu_mem=256" >> /boot/config.txt
+		fi
+	fi
+
+	IS_AUTOLOGIN=$(/usr/bin/raspi-config nonint get_autologin)
+	if [[ $IS_AUTOLOGIN == "1" ]]; then
+		ENABLE_AUTOLOGIN=$(yesno "Auto Login" "Enable automatic login on startup?")
+		if [[ $ENABLE_AUTOLOGIN == "1" ]]; then
+			/usr/bin/raspi-config nonint do_boot_behaviour B2
 		fi
 	fi
 
