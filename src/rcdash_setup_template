@@ -66,6 +66,7 @@ else
 		else
 			echo "gpu_mem=256" >> /boot/config.txt
 		fi
+		REBOOT_NEEDED=1
 	fi
 
 	IS_AUTOLOGIN=$(/usr/bin/raspi-config nonint get_autologin)
@@ -76,10 +77,10 @@ else
 		fi
 	fi
 
-	if [[ $MODEL == "Raspberry Pi 3"* ]]; then
-		if (whiptail --title "RPi3 Official Display" --yesno "Enable RPi Official touchscreen support?\n\nNote: only select yes if using an LCD display connected directly to your RPI, this will disable HDMI output!" 20 70 4); then
-			if ! grep -q "^dtoverlay=vc4-kms-dsi-7inch" /boot/config.txt; then
-				echo "dtoverlay=vc4-kms-dsi-7inch" >> /boot/cmdline.txt
+	if [[ $RPI_MODEL == "Raspberry Pi 3"* ]]; then
+		if grep -q '^dtoverlay=vc4-kms-v3d\s*$' /boot/config.txt; then
+			if (whiptail --title "RPi3 Official Display" --yesno "Enable RPi Official touchscreen support?\n\nNote: only select yes if using an LCD display connected directly to your RPI!" 20 70 4); then
+				sed -i 's/^dtoverlay=vc4-kms-v3d\s*$/dtoverlay=vc4-fkms-v3d/' /boot/config.txt
 				REBOOT_NEEDED=1
 			fi
 		fi
