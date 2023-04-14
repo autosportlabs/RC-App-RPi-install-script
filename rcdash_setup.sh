@@ -378,7 +378,7 @@ fi
 
 # Enable virtual keyboard if requeted
 if [[ $ENABLE_TOUCH_KEYBOARD == "1" ]]; then
-       	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:systemanddock"
+       	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:systemandmulti"
 else
        	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:system"
 fi
@@ -394,13 +394,7 @@ fi
 cat > "/home/$USER/.bashrc" <<EOF
 if shopt -q login_shell; then
   if [ -z "\$SSH_CLIENT" ] || [ -z "\$SSH_TTY" ]; then
-    echo "Starting RaceCapture, Ctrl-c to abort!"
-    for i in \$(seq 2 -1 0)
-    do
-      echo -n \$i
-      sleep 1
-      echo -ne '\b'
-    done
+    echo "Starting RaceCapture!"
     $BASH_LAUNCH_CMD
   fi
 fi
