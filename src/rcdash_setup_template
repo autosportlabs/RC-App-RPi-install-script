@@ -298,7 +298,7 @@ fi
 
 # Enable virtual keyboard if requeted
 if [[ $ENABLE_TOUCH_KEYBOARD == "1" ]]; then
-       	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:systemanddock"
+       	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:systemandmulti"
 else
        	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:system"
 fi
