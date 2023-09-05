@@ -1,4 +1,0 @@
-set startupmessage 0
-echo Starting RaceCapture...
-bind q quit
-exec $RC_LAUNCH_COMMAND

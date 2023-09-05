@@ -27,5 +27,5 @@ replace "__USBSTICK_SERVICE__" "usbstick-handler@.service"
 # Bashrc replacements
 replace "__BASH_RC__" "bashrc"
 
-# ratpoison
-replace "__RATPOISON_RC__" "ratpoisonrc"
+replace "__DEFAULT_SETTINGS__" "default_settings"
+replace "__SETTINGS_FILE__" "settings"
