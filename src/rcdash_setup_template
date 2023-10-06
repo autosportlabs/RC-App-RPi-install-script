@@ -1,6 +1,6 @@
 #!/bin/bash
 
-RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2[^"]*'`
+RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2[^"]*' | python3 -c 'import html, sys; [print(html.unescape(l), end="") for l in sys.stdin]'`
 RC_APP_FILENAME=`basename "$RC_APP_URL" | sed 's/\?.*//'`
 RPI_MODEL=$(tr -d '\0' </proc/device-tree/model)
 SETTINGS_FILE="/home/$SUDO_USER/.config/racecapture/install_settings.cfg"
