@@ -50,6 +50,7 @@ function dump_settings() {
 	cat > "$SETTINGS_FILE" <<-EOF
 	__SETTINGS_FILE__
 	EOF
+	chown $USER:$USER "$SETTINGS_FILE"
 }
 
 function setup_rpi_image_config() {
@@ -81,7 +82,7 @@ function setup_packages() {
 	# Install the necessary dependencies for the RC App
 	echo "Installing necessary packages"
 	BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero"
-	X11_PACKAGES="xserver-xorg xserver-xorg-legacy xinit"
+	X11_PACKAGES="xserver-xorg xserver-xorg-legacy xinit gldriver-test"
 	VNC_PACKAGES="x11vnc"
 
 	PACKAGES_TO_INSTALL="${BASE_PACKAGES}"
@@ -94,13 +95,20 @@ function setup_packages() {
 	apt-get -y install $PACKAGES_TO_INSTALL
 }
 
+function add_group() {
+	groupname="$1"
+	if ! groups "$USER" | grep -qw "$groupname"; then
+		adduser $USER $groupname
+	fi
+}
+
 function setup_user() {
 	# Groups needed for the dietpi user to access opengl, input (touch/mouse) and usb serial ports
 	echo "Adding user to necessary groups"
-	adduser $USER render
-	adduser $USER video
-	adduser $USER input
-	adduser $USER dialout
+	add_group "render"
+	add_group "video"
+	add_group "input"
+	add_group "dialout"
 	
 	# No .config directory can cause RC App to fail
 	mkdir -p /home/$USER/.config/racecapture
@@ -171,17 +179,50 @@ if [ "$FULL_INSTALL" = "1" ]; then
 		fi
 	fi
 
-	MODE=$(whiptail --title "Mode" --notags --radiolist \
-		"How do you want to run Race Capture?" 20 70 4 \
-		FB "Direct Framebuffer" $(eval_setting $MODE "FB") \
-		X11 "Using X11 (allows VNC)" $(eval_setting $MODE "X11") 3>&1 1>&2 2>&3)
-	exitstatus=$?
+	if [[ $RPI_MODEL == "Raspberry Pi 5"* ]]; then
+		MODE="X11"
+		whiptail --title "Mode" --msgbox "Due to driver bugs only X11 is supported on the RPi5 at this time" 20 70
+		exitstatus=$?
+	else
+		MODE=$(whiptail --title "Mode" --notags --radiolist \
+			"How do you want to run Race Capture?" 20 70 4 \
+			FB "Direct Framebuffer" $(eval_setting $MODE "FB") \
+			X11 "Using X11 (allows VNC)" $(eval_setting $MODE "X11" ) 3>&1 1>&2 2>&3)
+		exitstatus=$?
+	fi
 	if [ $exitstatus != 0 ]; then
         	echo "Cancelling installation"
 		exit 1
 	fi
 
 	if [[ $MODE == "X11" ]]; then
+		CUSTOM_SELECTION="ON"
+		res_values=("800x480" "1280x720" "1920x1080")
+		for value in "${res_values[@]}"; do
+			if [[ $RESOLUTION == $value ]]; then
+				CUSTOM_SELECTION="OFF"
+				break
+			fi
+		done
+
+		RESOLUTION=$(whiptail --nocancel --title "Resolution" --radiolist \
+			"Select or enter you screen resolution." 20 70 4 \
+		 	"800x480" "Official Rpi Display" $(eval_setting $RESOLUTION "800x480") \
+			"1280x720" "720p Display" $(eval_setting $RESOLUTION "1280x720") \
+		        "1920x1080" "1080p Display" $(eval_setting $RESOLUTION "1920x1080") \
+		        "Custom" "Custom display resolution" $CUSTOM_SELECTION 3>&1 1>&2 2>&3)	
+		exitstatus=$?
+		while ! [[ $RESOLUTION =~ ^[0-9]+x[0-9]+$ ]];
+		do
+			RESOLUTION=$(whiptail --title "Custom Resolution" --inputbox "Enter Custom input in the form <width>x<height>." 20 70 3>&1 1>&2 2>&3)
+			exitstatus=$?
+			if [ $exitstatus != 0 ]; then
+			       	echo "Cancelling installation"
+			       	exit 1
+		       	fi
+		done
+
+			
 		ENABLE_VNC=$(yesno "VNC" "Enable VNC?")
 	fi
 
@@ -321,7 +362,13 @@ if [ "$FULL_INSTALL" = "1" ]; then
 
 	install_rc_app
 
-	RC_SCRIPT_ARGS="-- -a -c graphics:show_cursor:0"
+	RC_SCRIPT_ARGS="-- -c graphics:show_cursor:0"
+	if [[ $MODE == "X11" ]]; then
+		RC_SCRIPT_ARGS+=" --size=$RESOLUTION"
+	else
+		RC_SCRIPT_ARGS+=" -a"
+	fi
+
 	if [[ $ENABLE_WATCHDOG == "1" ]]; then
 	       	RC_SCRIPT_ARGS="-w 1 ${RC_SCRIPT_ARGS}"
 	fi
