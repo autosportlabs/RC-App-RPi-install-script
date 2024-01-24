@@ -1,7 +1,5 @@
 #!/bin/bash
 
-RC_APP_URL=`curl -s https://podium.live/software | grep -Po '(?<=<a href=")[^"]*racecapture_linux_raspberrypi[^"]*.bz2[^"]*' | python3 -c 'import html, sys; [print(html.unescape(l), end="") for l in sys.stdin]'`
-RC_APP_FILENAME=`basename "$RC_APP_URL" | sed 's/\?.*//'`
 RPI_MODEL=$(tr -d '\0' </proc/device-tree/model)
 SETTINGS_FILE="/home/$SUDO_USER/.config/racecapture/install_settings.cfg"
 FIRST_RUN=1
@@ -95,7 +93,7 @@ function setup_rpi_image_config() {
 function setup_packages() {
 	# Install the necessary dependencies for the RC App
 	echo "Installing necessary packages"
-	BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero"
+	BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero jq"
 	X11_PACKAGES="xserver-xorg xserver-xorg-legacy xinit gldriver-test"
 	VNC_PACKAGES="x11vnc"
 
@@ -131,6 +129,8 @@ function setup_user() {
 
 function install_rc_app() {
 	# Download and install the RC App
+	RC_APP_URL=`curl -s 'https://podium.live/api/v1/applications/1/latest.json?expand=1&platform=rpi' | jq -r .release.url`
+	RC_APP_FILENAME=`basename "$RC_APP_URL" | sed 's/\?.*//'`
 	echo "Installing RC App '$RC_APP_FILENAME'"
 	cd /opt
 	if [ -f "$RC_APP_FILENAME" ]; then
