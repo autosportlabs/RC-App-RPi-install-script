@@ -179,17 +179,11 @@ if [ "$FULL_INSTALL" = "1" ]; then
 		fi
 	fi
 
-	if [[ $RPI_MODEL == "Raspberry Pi 5"* ]]; then
-		MODE="X11"
-		whiptail --title "Mode" --msgbox "Due to driver bugs only X11 is supported on the RPi5 at this time" 20 70
-		exitstatus=$?
-	else
-		MODE=$(whiptail --title "Mode" --notags --radiolist \
-			"How do you want to run Race Capture?" 20 70 4 \
-			FB "Direct Framebuffer" $(eval_setting $MODE "FB") \
-			X11 "Using X11 (allows VNC)" $(eval_setting $MODE "X11" ) 3>&1 1>&2 2>&3)
-		exitstatus=$?
-	fi
+	MODE=$(whiptail --title "Mode" --notags --radiolist \
+		"How do you want to run Race Capture?" 20 70 4 \
+		FB "Direct Framebuffer" $(eval_setting $MODE "FB") \
+		X11 "Using X11 (allows VNC)" $(eval_setting $MODE "X11" ) 3>&1 1>&2 2>&3)
+	exitstatus=$?
 	if [ $exitstatus != 0 ]; then
         	echo "Cancelling installation"
 		exit 1
