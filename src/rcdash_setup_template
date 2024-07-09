@@ -5,8 +5,13 @@ SETTINGS_FILE="/home/$SUDO_USER/.config/racecapture/install_settings.cfg"
 FIRST_RUN=1
 FULL_INSTALL=1
 REBOOT_NEEDED=0
-CONFIG_TXT=/boot/firmware/config.txt
-CMDLINE_TXT=/boot/firmware/cmdline.txt
+if [[ -d "/boot/firmwware" ]]; then
+	BOOT_BASE="/boot/firmware"
+else
+	BOOT_BASE="/boot"
+fi
+CONFIG_TXT="$BOOT_BASE/config.txt"
+CMDLINE_TXT="$BOOT_BASE/cmdline.txt"
 #OFFICIAL_DISPLAY=`lsmod | grep -q edt_ft5x06 && echo 1 || echo 0`
 
 function eval_setting() {
