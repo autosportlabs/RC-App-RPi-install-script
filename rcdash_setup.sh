@@ -5,6 +5,14 @@ SETTINGS_FILE="/home/$SUDO_USER/.config/racecapture/install_settings.cfg"
 FIRST_RUN=1
 FULL_INSTALL=1
 REBOOT_NEEDED=0
+if [[ -d "/boot/firmwware" ]]; then
+	BOOT_BASE="/boot/firmware"
+else
+	BOOT_BASE="/boot"
+fi
+CONFIG_TXT="$BOOT_BASE/config.txt"
+CMDLINE_TXT="$BOOT_BASE/cmdline.txt"
+#OFFICIAL_DISPLAY=`lsmod | grep -q edt_ft5x06 && echo 1 || echo 0`
 
 function eval_setting() {
 	if [ "$1" == "$2" ]; then
@@ -44,6 +52,7 @@ MODE=FB
 WIFI_RECONNECT=1
 USB_AUTOMOUNT=1
 SHUTDOWN_BUTTON=0
+WAIT_FOR_NETWORK=0
 WATCHDOG=1
 CURSOR=1
 TOUCH_KEYBOARD=1
@@ -57,6 +66,7 @@ MODE=$MODE
 WATCHDOG=$ENABLE_WATCHDOG
 WIFI_RECONNECT=$ENABLE_WIFI_RECONNECT
 SHUTDOWN_BUTTON=$ENABLE_SHUTDOWN_BUTTON
+WAIT_FOR_NETWORK=$ENABLE_WAIT_FOR_NETWORK
 CURSOR=$ENABLE_CURSOR
 TOUCH_KEYBOARD=$ENABLE_TOUCH_KEYBOARD
 USB_AUTOMOUNT=$ENABLE_USB_AUTOMOUNT
@@ -67,24 +77,24 @@ RESOLUTION=$RESOLUTION
 
 function setup_rpi_image_config() {
 	# Disable console blanking
-	if ! grep -q "logo\.nologo" /boot/cmdline.txt; then
-       		sed -i '1 s/$/ logo.nologo/' /boot/cmdline.txt
+	if ! grep -q "logo\.nologo" $CMDLINE_TXT; then
+       		sed -i '1 s/$/ logo.nologo/' $CMDLINE_TXT
 	fi
-	if ! grep -q "consoleblank=0" /boot/cmdline.txt; then
-       		sed -i '1 s/$/ consoleblank=0/' /boot/cmdline.txt
+	if ! grep -q "consoleblank=0" $CMDLINE_TXT; then
+       		sed -i '1 s/$/ consoleblank=0/' $CMDLINE_TXT
 	fi
 
 	# Disable splash screen
-	if ! grep -q "^disable_splash" /boot/config.txt; then
-       		echo "disable_splash=1" >> /boot/config.txt
+	if ! grep -q "^disable_splash" $CONFIG_TXT; then
+       		echo "disable_splash=1" >> $CONFIG_TXT
 	fi
 
 	# Set appropriate gpu memory
-	if ! grep -q "^gpu_mem=256" /boot/config.txt; then
-		if grep -q "^gpu_mem=" /boot/config.txt; then
-			sed -i '$s/^gpu_mem=.*/gpu_mem=256/' /boot/cmdline.txt
+	if ! grep -q "^gpu_mem=256" $CONFIG_TXT; then
+		if grep -q "^gpu_mem=" $CONFIG_TXT; then
+			sed -i '$s/^gpu_mem=.*/gpu_mem=256/' $CONFIG_TXT
 		else
-			echo "gpu_mem=256" >> /boot/config.txt
+			echo "gpu_mem=256" >> $CONFIG_TXT
 		fi
 		REBOOT_NEEDED=1
 	fi
@@ -125,6 +135,11 @@ function setup_user() {
 	# No .config directory can cause RC App to fail
 	mkdir -p /home/$USER/.config/racecapture
 	chown $USER:$USER /home/$USER/.config/racecapture
+	# Create id_rsa if necessary
+	if ! [ -f /home/$USER/.ssh/id_rsa ]; then
+		su -c 'ssh-keygen -b 2048 -t rsa -f /home/$USER/.ssh/id_rsa -q -N ""' - $USER
+	fi
+
 }
 
 function install_rc_app() {
@@ -184,14 +199,27 @@ if [ "$FULL_INSTALL" = "1" ]; then
 		fi
 	fi
 
-	if [[ $RPI_MODEL == "Raspberry Pi 3"* ]]; then
-		if grep -q '^dtoverlay=vc4-kms-v3d\s*$' /boot/config.txt; then
-			if (whiptail --title "RPi3 Official Display" --yesno "Enable RPi Official touchscreen support?\n\nNote: only select yes if using an LCD display connected directly to your RPI!" 20 70 4); then
-				sed -i 's/^dtoverlay=vc4-kms-v3d\s*$/dtoverlay=vc4-fkms-v3d/' /boot/config.txt
+	if (whiptail --title "RPi Official Display" --yesno "Enable RPi Official touchscreen support?\n\nNote: only select yes if using an RPi Official Display connected directly to your RPi!" 20 70 4); then
+		OFFICIAL_DISPLAY=1
+	#if [[ $OFFICIAL_DISPLAY == "1" ]]; then
+		if [[ $RPI_MODEL == "Raspberry Pi 3"* ]]; then
+			if grep -q '^dtoverlay=vc4-kms-v3d\s*$' $CONFIG_TXT; then
+				sed -i 's/^dtoverlay=vc4-kms-v3d\s*$/dtoverlay=vc4-fkms-v3d/' $CONFIG_TXT
+				REBOOT_NEEDED=1
+			fi
+		fi
+		if [[ $RPI_MODEL = "Raspberry Pi 5"* ]]; then
+			if ! grep -q '^dtoverlay=vc4-kms-v3d,nohdmi\s*$' $CONFIG_TXT; then
+		       		if grep -q '^dtoverlay=vc4-kms-v3d\s*$' $CONFIG_TXT; then
+			       		sed -i 's/^dtoverlay=vc4-kms-v3d\s*$/dtoverlay=vc4-kms-v3d,nohdmi/' $CONFIG_TXT
+		       		else
+			       		echo "dtoverlay=vc4-kms-v3d,nohdmi" >> $CONFIG_TXT
+		       		fi
 				REBOOT_NEEDED=1
 			fi
 		fi
 	fi
+
 
 	MODE=$(whiptail --title "Mode" --notags --radiolist \
 		"How do you want to run Race Capture?" 20 70 4 \
@@ -204,6 +232,9 @@ if [ "$FULL_INSTALL" = "1" ]; then
 	fi
 
 	if [[ $MODE == "X11" ]]; then
+		if [[ $OFFICIAL_DISPLAY == "1" ]]; then
+			RESOLUTION="800x480"
+		fi
 		CUSTOM_SELECTION="ON"
 		res_values=("800x480" "1280x720" "1920x1080")
 		for value in "${res_values[@]}"; do
@@ -273,7 +304,8 @@ if [ "$FULL_INSTALL" = "1" ]; then
 		"Choose features to enable" 20 78 4 \
 		WIFI_AUTO_RECONNECT "Automatically reconnect wifi" $(eval_setting $WIFI_RECONNECT 1) \
 		USB_AUTO_MOUNT "Mount usb drives under /media/usb#" $(eval_setting $USB_AUTOMOUNT 1) \
-		GPIO_SHUTDOWN "Enable GPIO Pin21 shutdown/reboot" $(eval_setting $SHUTDOWN_BUTTON 1) 3>&1 1>&2 2>&3)
+		GPIO_SHUTDOWN "Enable GPIO Pin21 shutdown/reboot" $(eval_setting $SHUTDOWN_BUTTON 1) \
+		WAIT_FOR_NETWORK "Wait for network during boot" $(eval_setting $WAIT_FOR_NETWORK 1) 3>&1 1>&2 2>&3)
 	exitstatus=$?
 	if [ $exitstatus == 0 ]; then
 		for i in $SELECTIONS
@@ -287,6 +319,9 @@ if [ "$FULL_INSTALL" = "1" ]; then
 					;;
 				GPIO_SHUTDOWN)
 					ENABLE_SHUTDOWN_BUTTON=1
+					;;
+				WAIT_FOR_NETWORK)
+					ENABLE_WAIT_FOR_NETWORK=1
 					;;
 				*)
 					echo "Uknown option"
@@ -447,6 +482,12 @@ ExecStart=/usr/local/bin/automount %I
 ExecStop=/usr/bin/pumount /dev/%I
 		EOF
 	fi
+	
+	if [[ $ENABLE_WAIT_FOR_NETWORK == "1" ]]; then
+		systemctl enable NetworkManager-wait-online
+	else
+		systemctl disable NetworkManager-wait-online
+	fi
 
 	install_rc_app
 
@@ -471,6 +512,11 @@ ExecStop=/usr/bin/pumount /dev/%I
 	       	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:systemandmulti"
 	else
 	       	RC_SCRIPT_ARGS+=" -c kivy:keyboard_mode:system"
+	fi
+
+	# Disable HDMI when an official display is connected to the RPI5
+	if [[ $OFFICIAL_DISPLAY == "1" ]] && [[ $MODE == "X11" ]]; then
+		RC_SCRIPT_ARGS+=" -c 'input:%(name)s:'"
 	fi
 	
 	RC_LAUNCH_COMMAND="/opt/racecapture/run_racecapture_rpi.sh $RC_SCRIPT_ARGS"
