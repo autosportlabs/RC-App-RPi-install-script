@@ -5,7 +5,7 @@ SETTINGS_FILE="/home/$SUDO_USER/.config/racecapture/install_settings.cfg"
 FIRST_RUN=1
 FULL_INSTALL=1
 REBOOT_NEEDED=0
-if [[ -d "/boot/firmwware" ]]; then
+if [[ -d "/boot/firmware" ]]; then
 	BOOT_BASE="/boot/firmware"
 else
 	BOOT_BASE="/boot"
