@@ -131,7 +131,6 @@ function install_rc_app() {
 	RC_APP_URL=`curl -s 'https://podium.live/api/v1/applications/1/latest.json?expand=1&platform=rpi' | jq -r .release.url`
 	RC_APP_FILENAME=`basename "$RC_APP_URL" | sed 's/\?.*//'`
 	echo "Installing RC App '$RC_APP_FILENAME'"
-	cd /opt
 	if [ -f "$RC_APP_FILENAME" ]; then
 	       	echo "RC App '$RC_APP_FILENAME' already downloaded"
 	else
@@ -139,19 +138,7 @@ function install_rc_app() {
 	       	wget -q --progress=bar --show-progress "$RC_APP_URL" -O "$RC_APP_FILENAME"
 	fi
 
-	if [ -d "racecapture" ]; then
-	       	if (whiptail --title "Overwrite Installation" --yesno "Overwrite the existing racecapture installation." 20 70 4); then
-		       	echo "Removing old installation"
-		       	rm -rf racecapture
-		       	echo "Extracting '$RC_APP_FILENAME'"
-		       	pv "$RC_APP_FILENAME" | tar xj
-	       	else
-		       	echo "Skipping"
-	       	fi
-	else
-	       	echo "Extracting '$RC_APP_FILENAME'"
-	       	pv "$RC_APP_FILENAME" | tar xj
-	fi
+	dpkg -i $RC_APP_FILENAME
 }
 
 
