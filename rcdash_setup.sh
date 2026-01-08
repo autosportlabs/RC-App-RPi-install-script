@@ -506,7 +506,7 @@ ExecStop=/usr/bin/pumount /dev/%I
 		RC_SCRIPT_ARGS+=" -c 'input:%(name)s:'"
 	fi
 	
-	RC_LAUNCH_COMMAND="/opt/racecapture/run_racecapture_rpi.sh $RC_SCRIPT_ARGS"
+	RC_LAUNCH_COMMAND="/opt/racecapture/_internal/run_racecapture_rpi.sh $RC_SCRIPT_ARGS"
 	
 	if [[ $MODE == "X11" ]]; then
 	       	BASH_LAUNCH_CMD="xinit -- -nocursor -dpms -s 0"
