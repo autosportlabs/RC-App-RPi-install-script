@@ -12,6 +12,8 @@ else
 fi
 CONFIG_TXT="$BOOT_BASE/config.txt"
 CMDLINE_TXT="$BOOT_BASE/cmdline.txt"
+LAUNCHER_SCRIPT="/opt/racecapture/run_racecapture_rpi.sh"
+
 #OFFICIAL_DISPLAY=`lsmod | grep -q edt_ft5x06 && echo 1 || echo 0`
 
 function eval_setting() {
@@ -157,6 +159,67 @@ function install_rc_app() {
 	dpkg -i $RC_APP_FILENAME
 }
 
+function install_launcher() {
+	cat > "$LAUNCHER_SCRIPT" <<-'EOF'
+#!/bin/bash
+
+# RaceCapture App launch script for Linux
+
+# launch with -w 1 to enable watchdog
+# launch with -l <logfile> to specify the logfile path
+
+
+LOGFILE=~/racecapture.log
+WATCHDOG=0
+
+while getopts ":w:l:" opt; do
+    case ${opt} in
+    w)  WATCHDOG=$OPTARG
+        ;;
+    l)  LOGFILE=$OPTARG
+        ;;
+    esac
+done
+shift $(expr $OPTIND - 1)
+APPARGS=$@
+
+# create the configuration directories as needed
+mkdir -p ~/.kivy
+mkdir -p ~/.config/racecapture
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd $DIR
+
+# Configure keyring to store Podium user credentials
+export PYTHON_KEYRING_BACKEND=sagecipher.keyring.Keyring
+if [ ! -d "${HOME}/.ssh" ]
+then
+# Create the ssh keys if they don't exist
+cat /dev/zero | ssh-keygen -q -N ""
+fi
+killall ssh-agent &>/dev/null
+eval "$(ssh-agent)" &>/dev/null
+ssh-add &>/dev/null
+
+# run and re-launch if crashed
+while
+  if [ -f $LOGFILE ]; then
+    mv $LOGFILE ${LOGFILE}_last
+  fi
+
+  ./race_capture $APPARGS >> $LOGFILE 2>&1
+
+  exitstatus=$?
+  if [[ $exitstatus -eq 0 || $WATCHDOG -ne 1 ]]; then
+    break
+  fi
+  echo "racecapture crashed with code $?. Restarting..." >> $LOGFILE
+do
+  :
+done
+	EOF
+	chmod +x "$LAUNCHER_SCRIPT"
+}
 
 if [ -z "$SUDO_USER" ]
 then
@@ -477,6 +540,7 @@ ExecStop=/usr/bin/pumount /dev/%I
 	fi
 
 	install_rc_app
+	install_launcher
 
 	RC_SCRIPT_ARGS="-- -c graphics:show_cursor:0"
 	if [[ $MODE == "X11" ]]; then
@@ -536,6 +600,7 @@ $RC_LAUNCH_COMMAND
 	dump_settings
 else
 	install_rc_app
+	install_launcher
 fi
 
 echo "Installation complete!!"

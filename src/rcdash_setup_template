@@ -12,6 +12,8 @@ else
 fi
 CONFIG_TXT="$BOOT_BASE/config.txt"
 CMDLINE_TXT="$BOOT_BASE/cmdline.txt"
+LAUNCHER_SCRIPT="/opt/racecapture/run_racecapture_rpi.sh"
+
 #OFFICIAL_DISPLAY=`lsmod | grep -q edt_ft5x06 && echo 1 || echo 0`
 
 function eval_setting() {
@@ -141,6 +143,12 @@ function install_rc_app() {
 	dpkg -i $RC_APP_FILENAME
 }
 
+function install_launcher() {
+	cat > "$LAUNCHER_SCRIPT" <<-'EOF'
+	__LAUNCHER_SCRIPT__
+	EOF
+	chmod +x "$LAUNCHER_SCRIPT"
+}
 
 if [ -z "$SUDO_USER" ]
 then
@@ -381,6 +389,7 @@ if [ "$FULL_INSTALL" = "1" ]; then
 	fi
 
 	install_rc_app
+	install_launcher
 
 	RC_SCRIPT_ARGS="-- -c graphics:show_cursor:0"
 	if [[ $MODE == "X11" ]]; then
@@ -433,6 +442,7 @@ if [ "$FULL_INSTALL" = "1" ]; then
 	dump_settings
 else
 	install_rc_app
+	install_launcher
 fi
 
 echo "Installation complete!!"
