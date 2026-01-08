@@ -160,7 +160,7 @@ function install_rc_app() {
 }
 
 function install_launcher() {
-	cat > "$LAUNCHER_SCRIPT" <<-EOF
+	cat > "$LAUNCHER_SCRIPT" <<-'EOF'
 #!/bin/bash
 
 # RaceCapture App launch script for Linux

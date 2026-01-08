@@ -32,3 +32,5 @@ replace "__SETTINGS_FILE__" "settings"
 
 # Launcher script
 replace "__LAUNCHER_SCRIPT__" "launcher_script"
+
+mv rcdash_setup.sh ..

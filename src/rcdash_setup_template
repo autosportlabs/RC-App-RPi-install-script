@@ -144,7 +144,7 @@ function install_rc_app() {
 }
 
 function install_launcher() {
-	cat > "$LAUNCHER_SCRIPT" <<-EOF
+	cat > "$LAUNCHER_SCRIPT" <<-'EOF'
 	__LAUNCHER_SCRIPT__
 	EOF
 	chmod +x "$LAUNCHER_SCRIPT"
