@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# RaceCapture App launch script for Linux
+
+# launch with -w 1 to enable watchdog
+# launch with -l <logfile> to specify the logfile path
+
+
+LOGFILE=~/racecapture.log
+WATCHDOG=0
+
+while getopts ":w:l:" opt; do
+    case ${opt} in
+    w)  WATCHDOG=$OPTARG
+        ;;
+    l)  LOGFILE=$OPTARG
+        ;;
+    esac
+done
+shift $(expr $OPTIND - 1)
+APPARGS=$@
+
+# create the configuration directories as needed
+mkdir -p ~/.kivy
+mkdir -p ~/.config/racecapture
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd $DIR
+
+# Configure keyring to store Podium user credentials
+export PYTHON_KEYRING_BACKEND=sagecipher.keyring.Keyring
+if [ ! -d "${HOME}/.ssh" ]
+then
+# Create the ssh keys if they don't exist
+cat /dev/zero | ssh-keygen -q -N ""
+fi
+killall ssh-agent &>/dev/null
+eval "$(ssh-agent)" &>/dev/null
+ssh-add &>/dev/null
+
+# run and re-launch if crashed
+while
+  if [ -f $LOGFILE ]; then
+    mv $LOGFILE ${LOGFILE}_last
+  fi
+
+  ./race_capture $APPARGS >> $LOGFILE 2>&1
+
+  exitstatus=$?
+  if [[ $exitstatus -eq 0 || $WATCHDOG -ne 1 ]]; then
+    break
+  fi
+  echo "racecapture crashed with code $?. Restarting..." >> $LOGFILE
+do
+  :
+done

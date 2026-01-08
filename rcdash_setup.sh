@@ -12,8 +12,9 @@ else
 fi
 CONFIG_TXT="$BOOT_BASE/config.txt"
 CMDLINE_TXT="$BOOT_BASE/cmdline.txt"
-#OFFICIAL_DISPLAY=`lsmod | grep -q edt_ft5x06 && echo 1 || echo 0`
 LAUNCHER_SCRIPT="/opt/racecapture/run_racecapture_rpi.sh"
+
+#OFFICIAL_DISPLAY=`lsmod | grep -q edt_ft5x06 && echo 1 || echo 0`
 
 function eval_setting() {
 	if [ "$1" == "$2" ]; then
@@ -125,6 +126,39 @@ function add_group() {
 	fi
 }
 
+function setup_user() {
+	# Groups needed for the dietpi user to access opengl, input (touch/mouse) and usb serial ports
+	echo "Adding user to necessary groups"
+	add_group "render"
+	add_group "video"
+	add_group "input"
+	add_group "dialout"
+	
+	# No .config directory can cause RC App to fail
+	mkdir -p /home/$USER/.config/racecapture
+	chown $USER:$USER /home/$USER/.config/racecapture
+	# Create id_rsa if necessary
+	if ! [ -f /home/$USER/.ssh/id_rsa ]; then
+		su -c 'ssh-keygen -b 2048 -t rsa -f /home/$USER/.ssh/id_rsa -q -N ""' - $USER
+	fi
+
+}
+
+function install_rc_app() {
+	# Download and install the RC App
+	RC_APP_URL=`curl -s 'https://podium.live/api/v1/applications/1/latest.json?expand=1&platform=rpi' | jq -r .release.url`
+	RC_APP_FILENAME=`basename "$RC_APP_URL" | sed 's/\?.*//'`
+	echo "Installing RC App '$RC_APP_FILENAME'"
+	if [ -f "$RC_APP_FILENAME" ]; then
+	       	echo "RC App '$RC_APP_FILENAME' already downloaded"
+	else
+	       	echo "Downloading..."
+	       	wget -q --progress=bar --show-progress "$RC_APP_URL" -O "$RC_APP_FILENAME"
+	fi
+
+	dpkg -i $RC_APP_FILENAME
+}
+
 function install_launcher() {
 	cat > "$LAUNCHER_SCRIPT" <<-EOF
 #!/bin/bash
@@ -186,40 +220,6 @@ done
 	EOF
 	chmod +x "$LAUNCHER_SCRIPT"
 }
-
-function setup_user() {
-	# Groups needed for the dietpi user to access opengl, input (touch/mouse) and usb serial ports
-	echo "Adding user to necessary groups"
-	add_group "render"
-	add_group "video"
-	add_group "input"
-	add_group "dialout"
-	
-	# No .config directory can cause RC App to fail
-	mkdir -p /home/$USER/.config/racecapture
-	chown $USER:$USER /home/$USER/.config/racecapture
-	# Create id_rsa if necessary
-	if ! [ -f /home/$USER/.ssh/id_rsa ]; then
-		su -c 'ssh-keygen -b 2048 -t rsa -f /home/$USER/.ssh/id_rsa -q -N ""' - $USER
-	fi
-
-}
-
-function install_rc_app() {
-	# Download and install the RC App
-	RC_APP_URL=`curl -s 'https://podium.live/api/v1/applications/1/latest.json?expand=1&platform=rpi' | jq -r .release.url`
-	RC_APP_FILENAME=`basename "$RC_APP_URL" | sed 's/\?.*//'`
-	echo "Installing RC App '$RC_APP_FILENAME'"
-	if [ -f "$RC_APP_FILENAME" ]; then
-	       	echo "RC App '$RC_APP_FILENAME' already downloaded"
-	else
-	       	echo "Downloading..."
-	       	wget -q --progress=bar --show-progress "$RC_APP_URL" -O "$RC_APP_FILENAME"
-	fi
-
-	dpkg -i $RC_APP_FILENAME
-}
-
 
 if [ -z "$SUDO_USER" ]
 then
@@ -540,8 +540,8 @@ ExecStop=/usr/bin/pumount /dev/%I
 	fi
 
 	install_rc_app
-    install_launcher
-    
+	install_launcher
+
 	RC_SCRIPT_ARGS="-- -c graphics:show_cursor:0"
 	if [[ $MODE == "X11" ]]; then
 		RC_SCRIPT_ARGS+=" --size=$RESOLUTION"

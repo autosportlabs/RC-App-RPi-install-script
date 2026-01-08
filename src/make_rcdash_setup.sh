@@ -29,3 +29,6 @@ replace "__BASH_RC__" "bashrc"
 
 replace "__DEFAULT_SETTINGS__" "default_settings"
 replace "__SETTINGS_FILE__" "settings"
+
+# Launcher script
+replace "__LAUNCHER_SCRIPT__" "launcher_script"
