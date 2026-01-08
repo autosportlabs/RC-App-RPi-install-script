@@ -13,7 +13,7 @@ fi
 CONFIG_TXT="$BOOT_BASE/config.txt"
 CMDLINE_TXT="$BOOT_BASE/cmdline.txt"
 #OFFICIAL_DISPLAY=`lsmod | grep -q edt_ft5x06 && echo 1 || echo 0`
-LAUNCHER_SCRIPT="/opt/racecapture/run_racecapture.sh"
+LAUNCHER_SCRIPT="/opt/racecapture/run_racecapture_rpi.sh"
 
 function eval_setting() {
 	if [ "$1" == "$2" ]; then
@@ -184,7 +184,7 @@ do
   :
 done
 	EOF
-
+	chmod +x "$LAUNCHER_SCRIPT"
 }
 
 function setup_user() {
@@ -570,7 +570,7 @@ ExecStop=/usr/bin/pumount /dev/%I
 		RC_SCRIPT_ARGS+=" -c 'input:%(name)s:'"
 	fi
 	
-	RC_LAUNCH_COMMAND="/opt/racecapture/_internal/run_racecapture_rpi.sh $RC_SCRIPT_ARGS"
+	RC_LAUNCH_COMMAND="/opt/racecapture/run_racecapture_rpi.sh $RC_SCRIPT_ARGS"
 	
 	if [[ $MODE == "X11" ]]; then
 	       	BASH_LAUNCH_CMD="xinit -- -nocursor -dpms -s 0"
