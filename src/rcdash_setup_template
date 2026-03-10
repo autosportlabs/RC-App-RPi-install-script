@@ -1,5 +1,7 @@
 #!/bin/bash
 
+
+EXPECTED_VERSION_CODENAME="bookworm"
 RPI_MODEL=$(tr -d '\0' </proc/device-tree/model)
 SETTINGS_FILE="/home/$SUDO_USER/.config/racecapture/install_settings.cfg"
 FIRST_RUN=1
@@ -15,6 +17,37 @@ CMDLINE_TXT="$BOOT_BASE/cmdline.txt"
 LAUNCHER_SCRIPT="/opt/racecapture/run_racecapture_rpi.sh"
 
 #OFFICIAL_DISPLAY=`lsmod | grep -q edt_ft5x06 && echo 1 || echo 0`
+
+function check_os_version() {
+	ACTUAL_CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
+	if [ "$ACTUAL_CODENAME" != "$EXPECTED_VERSION_CODENAME" ]; then
+    		echo ""
+    		echo "  ██╗    ██╗ █████╗ ██████╗ ███╗   ██╗██╗███╗   ██╗ ██████╗ "
+    		echo "  ██║    ██║██╔══██╗██╔══██╗████╗  ██║██║████╗  ██║██╔════╝ "
+    		echo "  ██║ █╗ ██║███████║██████╔╝██╔██╗ ██║██║██╔██╗ ██║██║  ███╗"
+    		echo "  ██║███╗██║██╔══██║██╔══██╗██║╚██╗██║██║██║╚██╗██║██║   ██║"
+    		echo "  ╚███╔███╔╝██║  ██║██║  ██║██║ ╚████║██║██║ ╚████║╚██████╔╝"
+    		echo "   ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═══╝ ╚═════╝ "
+    		echo ""
+    		echo "  !! UNEXPECTED OS VERSION DETECTED !!"
+    		echo ""
+    		echo "  Expected : $EXPECTED_VERSION_CODENAME"
+    		echo "  Detected : $ACTUAL_CODENAME"
+    		echo ""
+    		echo "  This script may not function correctly on this OS version."
+    		echo "  Proceed with caution or update to the expected version."
+    		echo ""
+
+    		read -r -p "  Continue anyway? [y/N]: " response
+    		case "$response" in
+        		[yY][eE][sS]|[yY]) ;;  # fall through and continue
+        		*)
+            		echo "  Aborting."
+            		exit 1
+            		;;
+    		esac
+	fi
+}
 
 function eval_setting() {
 	if [ "$1" == "$2" ]; then
@@ -157,6 +190,8 @@ then
 fi
 
 USER=$SUDO_USER
+
+check_os_version
 
 load_settings
 
