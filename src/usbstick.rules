@@ -1,1 +1,2 @@
-ACTION=="add", KERNEL=="sd[a-z][0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
+ACTION=="add", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
+ACTION=="add", KERNEL=="sd[a-z]", ENV{ID_BUS}=="usb", ENV{ID_PART_TABLE_TYPE}=="", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
