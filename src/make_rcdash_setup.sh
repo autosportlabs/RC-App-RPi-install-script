@@ -21,6 +21,7 @@ replace "__SHUTDOWN_BUTTON_SCRIPT__" "shutdown_button.py"
 
 # Automount replacements
 replace "__AUTOMOUNT__" "automount"
+replace "__AUTOUMOUNT__" "autoumount"
 replace "__USBSTICK_RULES__" "usbstick.rules"
 replace "__USBSTICK_SERVICE__" "usbstick-handler@.service" 
 

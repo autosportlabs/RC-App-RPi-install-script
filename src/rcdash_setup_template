@@ -88,9 +88,9 @@ function load_settings() {
 }
 
 function dump_settings() {
-	cat > "$SETTINGS_FILE" <<-EOF
+	cat > "$SETTINGS_FILE" <<EOF
 	__SETTINGS_FILE__
-	EOF
+EOF
 	chown $USER:$USER "$SETTINGS_FILE"
 }
 
@@ -122,7 +122,7 @@ function setup_rpi_image_config() {
 function setup_packages() {
 	# Install the necessary dependencies for the RC App
 	echo "Installing necessary packages"
-	BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero jq"
+	BASE_PACKAGES="mesa-utils mtdev-tools pv python3-gpiozero jq"
 	X11_PACKAGES="xserver-xorg xserver-xorg-legacy xinit gldriver-test"
 	VNC_PACKAGES="x11vnc"
 
@@ -177,9 +177,9 @@ function install_rc_app() {
 }
 
 function install_launcher() {
-	cat > "$LAUNCHER_SCRIPT" <<-'EOF'
+	cat > "$LAUNCHER_SCRIPT" <<'EOF'
 	__LAUNCHER_SCRIPT__
-	EOF
+EOF
 	chmod +x "$LAUNCHER_SCRIPT"
 }
 
@@ -370,13 +370,13 @@ if [ "$FULL_INSTALL" = "1" ]; then
 	if [[ $ENABLE_WIFI_RECONNECT == "1" ]]; then
 	       	echo "Enabling Wifi auto-reconnect"
 	       	# Setup wifi reconnect if not using dietpi which has it's own service
-		cat > /etc/cron.d/wifi_reconnect.cron <<-'EOF'
+		cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
 		__WIFI_RECONNECT_CRON__
-		EOF
+EOF
 
-		cat > /usr/local/bin/wifi_reconnect.sh <<-'EOF'
+		cat > /usr/local/bin/wifi_reconnect.sh <<'EOF'
 		__WIFI_RECONNECT__
-		EOF
+EOF
 
 		chmod +x /usr/local/bin/wifi_reconnect.sh
        	fi
@@ -384,15 +384,15 @@ if [ "$FULL_INSTALL" = "1" ]; then
 	if [[ $ENABLE_SHUTDOWN_BUTTON == "1" ]]; then
        		echo "Enabling GPIO shutdown button"
        		# Setup shutdown button support for GPIO21
-	       	cat > /usr/local/bin/shutdown_button.py <<-'EOF'
+	       	cat > /usr/local/bin/shutdown_button.py <<'EOF'
 		__SHUTDOWN_BUTTON_SCRIPT__
-		EOF
+EOF
 
 		chmod +x /usr/local/bin/shutdown_button.py
 
-		cat > /etc/systemd/system/shutdown_button.service <<-'EOF'
+		cat > /etc/systemd/system/shutdown_button.service <<'EOF'
 		__SHUTDOWN_BUTTON_SERVICE__
-		EOF
+EOF
 
 		systemctl enable shutdown_button.service
 	       	systemctl start shutdown_button.service
@@ -402,19 +402,24 @@ if [ "$FULL_INSTALL" = "1" ]; then
 	if [[ $ENABLE_USB_AUTOMOUNT == "1" ]]; then
 	       	echo "Enabling USB Automount"
 	       	# Add automount rules
-	       	cat > /usr/local/bin/automount <<-'EOF'
+	       	cat > /usr/local/bin/automount <<'EOF'
 		__AUTOMOUNT__
-		EOF
+EOF
+
+		cat > /usr/local/bin/autoumount <<'EOF'
+		__AUTOUMOUNT__
+EOF
   
 		chmod +x /usr/local/bin/automount
+		chmod +x /usr/local/bin/autoumount
 
-		cat > /etc/udev/rules.d/usbstick.rules <<-'EOF'
+		cat > /etc/udev/rules.d/usbstick.rules <<'EOF'
 		__USBSTICK_RULES__
-		EOF
+EOF
 
-		cat > /lib/systemd/system/usbstick-handler@.service <<-'EOF'
+		cat > /lib/systemd/system/usbstick-handler@.service <<'EOF'
 		__USBSTICK_SERVICE__
-		EOF
+EOF
 	fi
 	
 	if [[ $ENABLE_WAIT_FOR_NETWORK == "1" ]]; then
@@ -462,15 +467,15 @@ if [ "$FULL_INSTALL" = "1" ]; then
 	       	BASH_LAUNCH_CMD="$RC_LAUNCH_COMMAND"
 	fi
 	
-	cat > "/home/$USER/.bashrc" <<-EOF
+	cat > "/home/$USER/.bashrc" <<EOF
 	__BASH_RC__
-	EOF
+EOF
 	chown $USER:$USER /home/$USER/.bashrc
 	
 	if [[ $MODE == "X11" ]]; then
-		cat > "/home/$USER/.xinitrc" <<-EOF
+		cat > "/home/$USER/.xinitrc" <<EOF
 		__XINIT_RC__
-		EOF
+EOF
 		chown $USER:$USER /home/$USER/.xinitrc
 	fi
 
