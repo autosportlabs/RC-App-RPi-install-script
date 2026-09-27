@@ -1,0 +1,14 @@
+#!/bin/bash
+
+PART=$1
+
+MOUNTED_DIR=$(mount | grep "/dev/${PART} " | awk '{print $3}')
+
+if [ -n "$MOUNTED_DIR" ] && [ -d "$MOUNTED_DIR" ]
+then
+	# Lazy umount directory
+	/usr/bin/umount -l "$MOUNTED_DIR"
+
+	# Delete mount point
+	/usr/bin/rmdir "$MOUNTED_DIR" 2>/dev/null
+fi

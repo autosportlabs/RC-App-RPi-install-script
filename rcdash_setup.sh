@@ -96,7 +96,7 @@ RESOLUTION=800x480
 }
 
 function dump_settings() {
-	cat > "$SETTINGS_FILE" <<-EOF
+	cat > "$SETTINGS_FILE" <<EOF
 MODE=$MODE
 WATCHDOG=$ENABLE_WATCHDOG
 WIFI_RECONNECT=$ENABLE_WIFI_RECONNECT
@@ -106,7 +106,7 @@ CURSOR=$ENABLE_CURSOR
 TOUCH_KEYBOARD=$ENABLE_TOUCH_KEYBOARD
 USB_AUTOMOUNT=$ENABLE_USB_AUTOMOUNT
 RESOLUTION=$RESOLUTION
-	EOF
+EOF
 	chown $USER:$USER "$SETTINGS_FILE"
 }
 
@@ -138,7 +138,7 @@ function setup_rpi_image_config() {
 function setup_packages() {
 	# Install the necessary dependencies for the RC App
 	echo "Installing necessary packages"
-	BASE_PACKAGES="mesa-utils libgles2 libegl1-mesa libegl-mesa0 mtdev-tools pmount pv python3-gpiozero jq"
+	BASE_PACKAGES="mesa-utils mtdev-tools pv python3-gpiozero jq"
 	X11_PACKAGES="xserver-xorg xserver-xorg-legacy xinit gldriver-test"
 	VNC_PACKAGES="x11vnc"
 
@@ -193,7 +193,7 @@ function install_rc_app() {
 }
 
 function install_launcher() {
-	cat > "$LAUNCHER_SCRIPT" <<-'EOF'
+	cat > "$LAUNCHER_SCRIPT" <<'EOF'
 #!/bin/bash
 
 # RaceCapture App launch script for Linux
@@ -250,7 +250,7 @@ while
 do
   :
 done
-	EOF
+EOF
 	chmod +x "$LAUNCHER_SCRIPT"
 }
 
@@ -441,12 +441,12 @@ if [ "$FULL_INSTALL" = "1" ]; then
 	if [[ $ENABLE_WIFI_RECONNECT == "1" ]]; then
 	       	echo "Enabling Wifi auto-reconnect"
 	       	# Setup wifi reconnect if not using dietpi which has it's own service
-		cat > /etc/cron.d/wifi_reconnect.cron <<-'EOF'
+		cat > /etc/cron.d/wifi_reconnect.cron <<'EOF'
 # Run the wifi_reconnect script every minute
 * *   * * *   root    /usr/local/bin/wifi_reconnect.sh
-		EOF
+EOF
 
-		cat > /usr/local/bin/wifi_reconnect.sh <<-'EOF'
+		cat > /usr/local/bin/wifi_reconnect.sh <<'EOF'
 #!/bin/bash 
  
 SSID=$(/sbin/iwgetid --raw) 
@@ -460,7 +460,7 @@ then
 fi 
 
 echo "WiFi check finished"
-		EOF
+EOF
 
 		chmod +x /usr/local/bin/wifi_reconnect.sh
        	fi
@@ -468,7 +468,7 @@ echo "WiFi check finished"
 	if [[ $ENABLE_SHUTDOWN_BUTTON == "1" ]]; then
        		echo "Enabling GPIO shutdown button"
        		# Setup shutdown button support for GPIO21
-	       	cat > /usr/local/bin/shutdown_button.py <<-'EOF'
+	       	cat > /usr/local/bin/shutdown_button.py <<'EOF'
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # example gpiozero code that could be used to have a reboot
@@ -504,11 +504,11 @@ button.when_held = hld
 button.when_released = rls
 
 pause() # wait forever
-		EOF
+EOF
 
 		chmod +x /usr/local/bin/shutdown_button.py
 
-		cat > /etc/systemd/system/shutdown_button.service <<-'EOF'
+		cat > /etc/systemd/system/shutdown_button.service <<'EOF'
 [Unit]
 Description=GPIO shutdown button
 After=network.target
@@ -522,7 +522,7 @@ ExecStart=/usr/bin/python3 /usr/local/bin/shutdown_button.py
 
 [Install]
 WantedBy=multi-user.target
-		EOF
+EOF
 
 		systemctl enable shutdown_button.service
 	       	systemctl start shutdown_button.service
@@ -532,7 +532,7 @@ WantedBy=multi-user.target
 	if [[ $ENABLE_USB_AUTOMOUNT == "1" ]]; then
 	       	echo "Enabling USB Automount"
 	       	# Add automount rules
-	       	cat > /usr/local/bin/automount <<-'EOF'
+	       	cat > /usr/local/bin/automount <<'EOF'
 #!/bin/bash
  
 PART=$1
@@ -540,21 +540,50 @@ PART=$1
 mount_points=(usb1 usb2 usb3 usb4 usb5)
 for i in "${mount_points[@]}"
 do
-	if ! mountpoint -q /media/$1
+	if ! mountpoint -q /media/$1 2>/dev/null
 	then
-		/usr/bin/pmount --umask 000 --noatime -w --sync /dev/${PART} /media/$i
-		exit 0
+		# Ensure the directory exists before mounting
+		/usr/bin/mkdir -p /media/$i
+
+		# Mount the partition into the newly created folder
+		if /usr/bin/mount -o defaults,uid=1000,gid=1000,umask=000,noatime,sync /dev/${PART} /media/$i
+		then
+			exit 0
+		else
+			# Clean up the directory if the mount failed for some reason
+			/usr/bin/rmdir /media/$i 2>/dev/null
+			exit 1
+		fi
 	fi
 done
-		EOF
+EOF
+
+		cat > /usr/local/bin/autoumount <<'EOF'
+#!/bin/bash
+
+PART=$1
+
+MOUNTED_DIR=$(mount | grep "/dev/${PART} " | awk '{print $3}')
+
+if [ -n "$MOUNTED_DIR" ] && [ -d "$MOUNTED_DIR" ]
+then
+	# Lazy umount directory
+	/usr/bin/umount -l "$MOUNTED_DIR"
+
+	# Delete mount point
+	/usr/bin/rmdir "$MOUNTED_DIR" 2>/dev/null
+fi
+EOF
   
 		chmod +x /usr/local/bin/automount
+		chmod +x /usr/local/bin/autoumount
 
-		cat > /etc/udev/rules.d/usbstick.rules <<-'EOF'
-ACTION=="add", KERNEL=="sd[a-z][0-9]", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
-		EOF
+		cat > /etc/udev/rules.d/usbstick.rules <<'EOF'
+ACTION=="add", KERNEL=="sd[a-z][0-9]", ENV{ID_BUS}=="usb", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
+ACTION=="add", KERNEL=="sd[a-z]", ENV{ID_BUS}=="usb", ENV{ID_PART_TABLE_TYPE}=="", TAG+="systemd", ENV{SYSTEMD_WANTS}="usbstick-handler@%k"
+EOF
 
-		cat > /lib/systemd/system/usbstick-handler@.service <<-'EOF'
+		cat > /lib/systemd/system/usbstick-handler@.service <<'EOF'
 [Unit]
 Description=Mount USB sticks
 BindsTo=dev-%i.device
@@ -564,8 +593,8 @@ After=dev-%i.device
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/bin/automount %I
-ExecStop=/usr/bin/pumount /dev/%I
-		EOF
+ExecStop=/usr/local/bin/autoumount %I
+EOF
 	fi
 	
 	if [[ $ENABLE_WAIT_FOR_NETWORK == "1" ]]; then
@@ -613,22 +642,22 @@ ExecStop=/usr/bin/pumount /dev/%I
 	       	BASH_LAUNCH_CMD="$RC_LAUNCH_COMMAND"
 	fi
 	
-	cat > "/home/$USER/.bashrc" <<-EOF
+	cat > "/home/$USER/.bashrc" <<EOF
 if shopt -q login_shell; then
   if [ -z "\$SSH_CLIENT" ] || [ -z "\$SSH_TTY" ]; then
     echo "Starting RaceCapture!"
     $BASH_LAUNCH_CMD
   fi
 fi
-	EOF
+EOF
 	chown $USER:$USER /home/$USER/.bashrc
 	
 	if [[ $MODE == "X11" ]]; then
-		cat > "/home/$USER/.xinitrc" <<-EOF
+		cat > "/home/$USER/.xinitrc" <<EOF
 #!/bin/sh
 $VNC_CMD
 $RC_LAUNCH_COMMAND
-		EOF
+EOF
 		chown $USER:$USER /home/$USER/.xinitrc
 	fi
 

@@ -5,9 +5,19 @@ PART=$1
 mount_points=(usb1 usb2 usb3 usb4 usb5)
 for i in "${mount_points[@]}"
 do
-	if ! mountpoint -q /media/$1
+	if ! mountpoint -q /media/$1 2>/dev/null
 	then
-		/usr/bin/pmount --umask 000 --noatime -w --sync /dev/${PART} /media/$i
-		exit 0
+		# Ensure the directory exists before mounting
+		/usr/bin/mkdir -p /media/$i
+
+		# Mount the partition into the newly created folder
+		if /usr/bin/mount -o defaults,uid=1000,gid=1000,umask=000,noatime,sync /dev/${PART} /media/$i
+		then
+			exit 0
+		else
+			# Clean up the directory if the mount failed for some reason
+			/usr/bin/rmdir /media/$i 2>/dev/null
+			exit 1
+		fi
 	fi
 done
