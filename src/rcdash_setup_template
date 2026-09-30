@@ -163,7 +163,8 @@ function setup_user() {
 
 function install_rc_app() {
 	# Download and install the RC App
-	RC_APP_URL=`curl -s 'https://podium.live/api/v1/applications/1/latest.json?expand=1&platform=rpi' | jq -r .release.url`
+	RC_APP_URL=`curl -s https://software.autosportlabs.com/ | grep -oE 'https?://[^"'"'"' <>]*raspberrypi[^"'"'"' <>]*\.deb' | sort -u`
+	#RC_APP_URL=`curl -s 'https://podium.live/api/v1/applications/1/latest.json?expand=1&platform=rpi' | jq -r .release.url`
 	RC_APP_FILENAME=`basename "$RC_APP_URL" | sed 's/\?.*//'`
 	echo "Installing RC App '$RC_APP_FILENAME'"
 	if [ -f "$RC_APP_FILENAME" ]; then
