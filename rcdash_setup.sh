@@ -72,7 +72,7 @@ function password_prompt() {
 	PASSWORD=$(whiptail --title "$1" --passwordbox "$2" 20 70 3>&1 1>&2 2>&3)
 	exitstatus=$?
 	if [ $exitstatus != 0 ]; then
-		echo "Password cahcelled, default to no password"
+		echo "Password cancelled, default to no password"
 		PASSWORD=""
 	fi
 	echo $PASSWORD
@@ -179,8 +179,20 @@ function setup_user() {
 
 function install_rc_app() {
 	# Download and install the RC App
-	RC_APP_URL=`curl -s https://software.autosportlabs.com/ | grep -oE 'https?://[^"'"'"' <>]*raspberrypi[^"'"'"' <>]*\.deb' | sort -u`
-	#RC_APP_URL=`curl -s 'https://podium.live/api/v1/applications/1/latest.json?expand=1&platform=rpi' | jq -r .release.url`
+	echo "Fetching lastest release URL!"
+	RC_APP_URL=`curl -s 'https://software.autosportlabs.com/api/downloads' | jq -r '.software[] | select(.name == "racecaptureapp").downloads[] | select(.platformName == "rpi").url'`
+
+	if [ $? -ne 0 ]; then
+		echo "Error: Could not fetch the Raspberry Pi URL." >&2
+		exit 1
+	fi
+
+	# 3. Check if the variable is empty (e.g., if the platform or app wasn't found)
+	if [ -z "$RC_APP_URL" ] || [ "$RC_APP_URL" == "null" ]; then
+		echo "Error: Could not find the Raspberry Pi URL in the download API." >&2
+		exit 1
+	fi
+
 	RC_APP_FILENAME=`basename "$RC_APP_URL" | sed 's/\?.*//'`
 	echo "Installing RC App '$RC_APP_FILENAME'"
 	if [ -f "$RC_APP_FILENAME" ]; then
